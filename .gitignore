@@ -1,0 +1,10 @@
+# Ignored user-specified files & directories
+.agents/
+1.hunt_user.md
+AGENTS.md
+
+# Operating System & Environment
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
