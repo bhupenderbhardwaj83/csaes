@@ -1398,3 +1398,24 @@ Summarize bidirectional port and protocol volume between two communicating endpo
 | sort(FlowCount, order=desc)
 | table([FlowDirection, TargetPort, FlowCount, ActiveBinaries])
 ```
+
+
+---
+
+## 12. Query Hub Visualizations: Correlating Process, DNS & Network Graphs
+
+The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation constructs (`selfJoinFilter`, `splitString`, `concatArray`, and `ipLocation`). You can visualize these correlated multi-event outputs using standard Falcon widgets:
+
+- **Browser Process to DNS Resolution Graph**:
+  Using `selfJoinFilter(field=[aid, falconPID])`, feed the grouped `[aid, falconPID]` outputs directly into a directed Sankey diagram or multi-value table:
+  ```cql
+  | groupBy([fileName, DomainName], function=count(as=Resolutions))
+  | sort(Resolutions, order=desc, limit=20)
+  | table([fileName, DomainName, Resolutions])
+  ```
+- **GeoIP Authentication Spread**:
+  Using `ipLocation(aip)`, pipe the resulting coordinates directly into the Map Widget:
+  ```cql
+  | groupBy([aip.country, aip.city, aip.lat, aip.lon], function=count(as=LogonDensity))
+  ```
+

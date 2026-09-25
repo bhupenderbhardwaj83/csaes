@@ -3999,3 +3999,165 @@ A composite dashboard query providing an end-to-end incident summary in a single
 
 ---
 *Created as part of the CrowdStrike Falcon Advanced Event Search & Detection Engineering series.*
+
+---
+
+## 10. CrowdStrike Advanced Query Hub: Dynamic Command Playbooks
+
+A repository of operational Falcon LogScale queries utilizing advanced correlation operators (`selfJoinFilter`), string and array manipulation (`splitString`, `concatArray`), external network auditing (`!cidr`), and cross-platform browser process lineage tracing.
+
+---
+
+### Command 1: Command History & Process Lineage Reconstruction
+* **Objective**: Forensic reconstruction of interactive operator console sessions (CMD, PowerShell). Reconstructs parent-child execution chains and decodes multi-command blocks executed within a single process context.
+* **Key Operators**: `selfJoinFilter([aid, TargetProcessId])`, `splitString(by="¶")`, `concatArray(separator="\n")`, `format()`, `groupBy()`, `selectLast()`
+
+```cql
+// ==============================================================================
+// 1. COMMAND HISTORY, PROCESS LINEAGE & EXECUTION CONTEXT
+// Correlates ProcessRollup2 and CommandHistory via selfJoinFilter on Windows
+// ==============================================================================
+#event_simpleName=/^(CommandHistory|ProcessRollup2)$/
+event_platform=Win
+| selfJoinFilter(
+    field=[aid, TargetProcessId],
+    where=[
+      { #event_simpleName=ProcessRollup2 },
+      { #event_simpleName=CommandHistory }
+    ]
+  )
+| case {
+    #event_simpleName=CommandHistory
+    | CommandHistory=*
+    | splitString(
+        field=CommandHistory,
+        by="¶",
+        as=CommandHistorySplit
+      )
+    | concatArray(
+        CommandHistorySplit,
+        separator="\n",
+        as=CommandHistoryClean
+      ) ;
+
+    #event_simpleName=ProcessRollup2
+    | ImageFileName=/\\(?<ChildBaseFileName>[^\\]+)$/
+    | ExecutionChain := format(
+        format="%s -> %s (PID: %s)",
+        field=[ParentBaseFileName, ChildBaseFileName, RawProcessId]
+      ) ;
+  }
+| groupBy([aid, ComputerName, UserName, TargetProcessId], function=[
+    selectLast(ExecutionChain),
+    selectLast(CommandHistoryClean)
+  ], limit=max)
+| CommandHistoryClean=*
+```
+
+---
+
+### Command 2: User Logon Dossier (Time, Type, Location, Last Password Change)
+* **Objective**: Comprehensive domain user authentication dossier. Maps numeric LogonTypes to human-readable names, translates admin privileges, resolves GeoIP (City, State, Country), and converts timestamps.
+* **Key Operators**: `in(LogonType, values=["2", "10"])`, `ipLocation(aip)`, `case { UserIsAdmin ... }`, `case { LogonType ... }`, `formatTime()`
+
+```cql
+// ==============================================================================
+// 2. USER LOGON DETAILS (TIME, TYPE, LOCATION, LAST PASSWORD CHANGE)
+// Scopes domain users, enriches GeoIP, decodes logon categories, and converts epoch
+// ==============================================================================
+#event_simpleName=UserLogon UserSid=S-1-5-21-*
+| in(LogonType, values=["2", "10"])
+| ipLocation(aip)
+| case {
+    UserIsAdmin = "1" | UserIsAdmin := "Yes" ;
+    UserIsAdmin = "0" | UserIsAdmin := "No" ;
+    *
+  }
+| case {
+    LogonType = "2"  | LogonType := "Interactive" ;
+    LogonType = "3"  | LogonType := "Network" ;
+    LogonType = "4"  | LogonType := "Batch" ;
+    LogonType = "5"  | LogonType := "Service" ;
+    LogonType = "7"  | LogonType := "Unlock" ;
+    LogonType = "8"  | LogonType := "Network Cleartext" ;
+    LogonType = "9"  | LogonType := "New Credentials" ;
+    LogonType = "10" | LogonType := "Remote Interactive" ;
+    LogonType = "11" | LogonType := "Cached Interactive" ;
+    *
+  }
+| PasswordLastSet := PasswordLastSet * 1000
+| LogonTime := LogonTime * 1000
+| PasswordLastSet := formatTime("%Y-%m-%d %H:%M:%S", field=PasswordLastSet, locale=en_US, timezone=Z)
+| LogonTime := formatTime("%Y-%m-%d %H:%M:%S", field=LogonTime, locale=en_US, timezone=Z)
+| table(["LogonTime", "aid", "UserName", ComputerName, "UserSid", "LogonType", "UserIsAdmin", "PasswordLastSet", "aip.city", "aip.state", "aip.country"])
+```
+
+---
+
+### Command 3: Exploitation of Windows Shell CVE-2026-32202 (External SMB Sweep)
+* **Objective**: Detects exploitation attempts against Windows Shell vulnerabilities leveraging malicious external SMB shares. Excludes internal RFC1918 subnets and aggregates anomalous share attachments.
+* **Key Operators**: `setTimeInterval(start=1h, end=0h)`, `in(field=#event_simpleName, ...)`, `!cidr(RemoteAddressIP4)`, `default(replaceEmpty=true)`, `groupBy()`, `collect()`
+
+```cql
+// ==============================================================================
+// 3. EXPLOITATION OF WINDOWS SHELL CVE-2026-32202 (SMB SHARE AUDITING)
+// Audits external SMB share opens/logon brute force excluding private RFC1918 subnets
+// ==============================================================================
+setTimeInterval(start=1h, end=0h)
+| in(field=#event_simpleName, values=[SmbClientShareClosedEtw, SmbClientShareLogonBruteForceLowThreshold, SmbClientShareLogonBruteForceSuspected, SmbClientShareOpenedEtw, SmbServerShareOpenedEtw, SmbServerV1AuditEtw, ProcessRollup2])
+| !cidr(RemoteAddressIP4, subnet=["172.22.0.0/16", "192.168.0.0/16", "10.0.0.0/8"])
+| default(field=[RemoteAddressIP4, LinkName], value="N/A", replaceEmpty=true)
+| groupBy([ComputerName], function=[collect([#event_simpleName, SmbShareName, SmbClientName, ComputerName, ClientComputerName, DomainName, destination.ip, RemoteAddressIP4, LinkName])], limit=20000)
+| sort(RemoteAddressIP4)
+```
+
+---
+
+### Command 4: DNS Resolutions from Browser Processes (Windows)
+* **Objective**: Correlates process creation and subsequent DNS resolutions occurring under the exact same Falcon Unified Process ID (UPID) for Windows web browsers (Chrome, Firefox, Edge).
+* **Key Operators**: `(#event_simpleName=ProcessRollup2 OR DnsRequest)`, `wildcard(?ComputerName)`, `concat([FileName, ContextBaseFileName])`, `in(values=[chrome.exe, firefox.exe, msedge.exe])`, `selfJoinFilter([aid, falconPID])`
+
+```cql
+// ==============================================================================
+// 4. DNS RESOLUTIONS FROM BROWSER PROCESSES (WINDOWS)
+// Correlates ProcessRollup2 & DnsRequest under the same Falcon UPID on Windows
+// ==============================================================================
+(#event_simpleName=ProcessRollup2 OR #event_simpleName=DnsRequest) event_platform=Win
+| ComputerName=~wildcard(?ComputerName, ignoreCase=true)
+// Normalize file name value across both events
+| fileName := concat([FileName, ContextBaseFileName])
+// Make sure responsible process is a web browser
+| in(field="fileName", values=[chrome.exe, firefox.exe, msedge.exe], ignoreCase=true)
+// Normalize Falcon UPID
+| falconPID := TargetProcessId | falconPID := ContextProcessId
+// Use selfJoinFilter to make sure execution and DNS resolution occurred under the same UPID value
+| selfJoinFilter(field=[aid, falconPID], where=[{#event_simpleName=ProcessRollup2}, {#event_simpleName=DnsRequest}])
+// Aggregate results
+| groupBy([aid, falconPID], function=[collect([ComputerName, UserName, fileName, DomainName])])
+```
+
+---
+
+### Command 5: DNS Resolutions from Browser Processes (macOS)
+* **Objective**: Correlates process execution and DNS resolutions for macOS browsers ('Google Chrome', 'firefox', 'Safari', 'edge') linked strictly under the same Falcon UPID.
+* **Key Operators**: `(#event_simpleName=ProcessRollup2 OR DnsRequest)`, `event_platform=Mac`, `in(values=['Google Chrome', 'firefox', 'Safari', 'edge'])`, `selfJoinFilter([aid, falconPID])`, `groupBy([aid, falconPID])`
+
+```cql
+// ==============================================================================
+// 5. DNS RESOLUTIONS FROM BROWSER PROCESSES (MACOS)
+// Correlates ProcessRollup2 & DnsRequest under the same Falcon UPID on macOS
+// ==============================================================================
+(#event_simpleName=ProcessRollup2 OR #event_simpleName=DnsRequest) event_platform=Mac
+| ComputerName=~wildcard(?ComputerName, ignoreCase=true)
+// Normalize file name value across both events
+| fileName := concat([FileName, ContextBaseFileName])
+// Make sure responsible process is a macOS web browser
+| in(field="fileName", values=["Google Chrome", "firefox", "Safari", "edge"], ignoreCase=true)
+// Normalize Falcon UPID
+| falconPID := TargetProcessId | falconPID := ContextProcessId
+// Use selfJoinFilter to make sure execution and DNS resolution occurred under the same UPID value
+| selfJoinFilter(field=[aid, falconPID], where=[{#event_simpleName=ProcessRollup2}, {#event_simpleName=DnsRequest}])
+// Aggregate results
+| groupBy([aid, falconPID], function=[collect([ComputerName, host.os.platform, UserName, fileName, DomainName])])
+```
+
