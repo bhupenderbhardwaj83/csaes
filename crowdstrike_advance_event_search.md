@@ -4006,6 +4006,15 @@ A composite dashboard query providing an end-to-end incident summary in a single
 
 A curated repository of production-grade Falcon LogScale queries utilizing advanced correlation operators (`selfJoinFilter`), string and array manipulation (`splitString`, `concatArray`), Base64 recursive decoding, external network socket auditing (`!cidr`), and cross-platform browser process lineage tracing.
 
+### Interactive Query Hub Navigation & Keyboard Shortcuts
+
+When using the interactive hunting portal, the Query Hub tab supports full keyboard accessibility and rapid triage matching the Filter Catalog workflow:
+* **Focus Search (`/`)**: Instantly focuses and selects the search input from anywhere on the Query Hub tab.
+* **Clear & Reset (`Escape` / `✕`)**: Resets the search query, restores the category filter to **All Commands**, clears highlighted selections, and blurs input focus.
+* **Arrow Key Navigation (`↑` / `↓`)**: Steps through the list of rendered query cards with automated smooth scrolling.
+* **Copy to Clipboard (`Enter`)**: Copies the selected query's CQL directly to the system clipboard with instant toast confirmation.
+* **Accordion Toggle (`Space` / `→` / `←`)**: Expands or collapses the selected command's forensic parameters, operators, and CQL code block.
+
 ---
 
 ### Command 1: Command History & Process Lineage Reconstruction
