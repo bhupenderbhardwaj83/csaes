@@ -1404,18 +1404,46 @@ Summarize bidirectional port and protocol volume between two communicating endpo
 
 ## 12. Query Hub Visualizations: Correlating Process, DNS & Network Graphs
 
-The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation constructs (`selfJoinFilter`, `splitString`, `concatArray`, and `ipLocation`). You can visualize these correlated multi-event outputs using standard Falcon widgets:
+The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation constructs (`selfJoinFilter`, `splitString`, `concatArray`, `base64Decode`, `join(mode=left)`, and `ipLocation`). You can visualize these correlated multi-event outputs using standard Falcon dashboard widgets:
 
-- **Browser Process to DNS Resolution Graph**:
+- **Browser Process to DNS Resolution Graph (Playbooks 4 & 5)**:
   Using `selfJoinFilter(field=[aid, falconPID])`, feed the grouped `[aid, falconPID]` outputs directly into a directed Sankey diagram or multi-value table:
   ```cql
   | groupBy([fileName, DomainName], function=count(as=Resolutions))
   | sort(Resolutions, order=desc, limit=20)
   | table([fileName, DomainName, Resolutions])
   ```
-- **GeoIP Authentication Spread**:
-  Using `ipLocation(aip)`, pipe the resulting coordinates directly into the Map Widget:
+
+- **GeoIP Authentication Spread & Ingress Density (Playbooks 2 & 8)**:
+  Using `ipLocation(aip)`, pipe the resulting coordinates directly into the Map Widget or geographic heat table:
   ```cql
   | groupBy([aip.country, aip.city, aip.lat, aip.lon], function=count(as=LogonDensity))
   ```
 
+- **Public DoH Resolver & Evasion Traffic Breakdown (Playbook 6)**:
+  Visualize covert DNS-over-HTTPS resolution volume via a Donut or Bar Chart comparing client processes against DoH endpoints:
+  ```cql
+  | groupBy([DomainName, ContextBaseFileName], function=count(as=QueryVolume))
+  | sort(QueryVolume, order=desc)
+  ```
+
+- **Enterprise Generative AI & LLM Consumption Trends (Playbooks 10 & 11)**:
+  Track shadow AI adoption across the enterprise using a Top-10 Horizontal Bar Chart or Treemap grouped by AI service provider:
+  ```cql
+  | groupBy([DomainName], function=count(as=AiQueries))
+  | sort(AiQueries, order=desc, limit=15)
+  ```
+
+- **PowerShell Obfuscation & Malicious Cradle Prevalence (Playbooks 9 & 12)**:
+  Plot `uniqueEndpointCount` vs `executionCount` on a Scatter Plot to quickly isolate widespread administrative automation from targeted one-off encoded cradles:
+  ```cql
+  | table([executionCount, uniqueEndpointCount, DecodedString, CommandLine])
+  | sort(executionCount, order=desc)
+  ```
+
+- **Account Brute-Force & Password Spray Sankey (Playbook 14)**:
+  Feed `TotalFailedLogins`, `UserName`, and `LastLoggedOnHost` into a Sankey flow diagram to visualize attacker credential spraying distribution across target machines:
+  ```cql
+  | table([UserName, LastLoggedOnHost, TotalFailedLogins, TotalSuccessfulLogins])
+  | sort(TotalFailedLogins, order=desc)
+  ```

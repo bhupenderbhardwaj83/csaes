@@ -4004,19 +4004,17 @@ A composite dashboard query providing an end-to-end incident summary in a single
 
 ## 10. CrowdStrike Advanced Query Hub: Dynamic Command Playbooks
 
-A repository of operational Falcon LogScale queries utilizing advanced correlation operators (`selfJoinFilter`), string and array manipulation (`splitString`, `concatArray`), external network auditing (`!cidr`), and cross-platform browser process lineage tracing.
+A curated repository of production-grade Falcon LogScale queries utilizing advanced correlation operators (`selfJoinFilter`), string and array manipulation (`splitString`, `concatArray`), Base64 recursive decoding, external network socket auditing (`!cidr`), and cross-platform browser process lineage tracing.
 
 ---
 
 ### Command 1: Command History & Process Lineage Reconstruction
-* **Objective**: Forensic reconstruction of interactive operator console sessions (CMD, PowerShell). Reconstructs parent-child execution chains and decodes multi-command blocks executed within a single process context.
-* **Key Operators**: `selfJoinFilter([aid, TargetProcessId])`, `splitString(by="¶")`, `concatArray(separator="\n")`, `format()`, `groupBy()`, `selectLast()`
+* **Category**: Process & Lineage (Windows)
+* **Objective**: Forensic reconstruction of interactive operator console sessions. Reconstructs parent-child execution chains and decodes multi-command blocks executed within a single process context.
+* **Key Operators**: `#event_simpleName=/^(CommandHistory|ProcessRollup2)$/, selfJoinFilter([aid, TargetProcessId]), splitString(by='¶'), concatArray(separator='\n'), groupBy(), selectLast()`
+* **Parameters & Scope**: Requires Windows sensor with CommandHistory event telemetry enabled. Joins on aid and TargetProcessId.
 
 ```cql
-// ==============================================================================
-// 1. COMMAND HISTORY, PROCESS LINEAGE & EXECUTION CONTEXT
-// Correlates ProcessRollup2 and CommandHistory via selfJoinFilter on Windows
-// ==============================================================================
 #event_simpleName=/^(CommandHistory|ProcessRollup2)$/
 event_platform=Win
 | selfJoinFilter(
@@ -4056,15 +4054,13 @@ event_platform=Win
 
 ---
 
-### Command 2: User Logon Dossier (Time, Type, Location, Last Password Change)
+### Command 2: User Logon Dossier (Time, Type, GeoIP & Password Age)
+* **Category**: Authentication (Windows / Domain)
 * **Objective**: Comprehensive domain user authentication dossier. Maps numeric LogonTypes to human-readable names, translates admin privileges, resolves GeoIP (City, State, Country), and converts timestamps.
-* **Key Operators**: `in(LogonType, values=["2", "10"])`, `ipLocation(aip)`, `case { UserIsAdmin ... }`, `case { LogonType ... }`, `formatTime()`
+* **Key Operators**: `#event_simpleName=UserLogon, UserSid=S-1-5-21-*, in(LogonType, values=['2','10']), ipLocation(aip), case{ UserIsAdmin... }, case{ LogonType... }, formatTime()`
+* **Parameters & Scope**: Filters for domain SIDs (S-1-5-21-*). Epoch fields (PasswordLastSet, LogonTime) multiplied by 1000 for millisecond formatting.
 
 ```cql
-// ==============================================================================
-// 2. USER LOGON DETAILS (TIME, TYPE, LOCATION, LAST PASSWORD CHANGE)
-// Scopes domain users, enriches GeoIP, decodes logon categories, and converts epoch
-// ==============================================================================
 #event_simpleName=UserLogon UserSid=S-1-5-21-*
 | in(LogonType, values=["2", "10"])
 | ipLocation(aip)
@@ -4094,15 +4090,13 @@ event_platform=Win
 
 ---
 
-### Command 3: Exploitation of Windows Shell CVE-2026-32202 (External SMB Sweep)
-* **Objective**: Detects exploitation attempts against Windows Shell vulnerabilities leveraging malicious external SMB shares. Excludes internal RFC1918 subnets and aggregates anomalous share attachments.
-* **Key Operators**: `setTimeInterval(start=1h, end=0h)`, `in(field=#event_simpleName, ...)`, `!cidr(RemoteAddressIP4)`, `default(replaceEmpty=true)`, `groupBy()`, `collect()`
+### Command 3: Windows Shell CVE-2026-32202 Exploitation (External SMB Sweep)
+* **Category**: Exploitation & Network (Windows)
+* **Objective**: Surfaces remote code execution and NTLM credential harvesting via crafted shortcut files (.lnk, .search-ms) that trigger automatic external SMB connections when rendered in Explorer.
+* **Key Operators**: `setTimeInterval(start=1h, end=0h), in(field=#event_simpleName, ...), !cidr(RemoteAddressIP4), default(replaceEmpty=true), groupBy(), collect()`
+* **Parameters & Scope**: Excludes private internal subnets: 172.22.0.0/16, 192.168.0.0/16, 10.0.0.0/8. Adjust time interval as needed.
 
 ```cql
-// ==============================================================================
-// 3. EXPLOITATION OF WINDOWS SHELL CVE-2026-32202 (SMB SHARE AUDITING)
-// Audits external SMB share opens/logon brute force excluding private RFC1918 subnets
-// ==============================================================================
 setTimeInterval(start=1h, end=0h)
 | in(field=#event_simpleName, values=[SmbClientShareClosedEtw, SmbClientShareLogonBruteForceLowThreshold, SmbClientShareLogonBruteForceSuspected, SmbClientShareOpenedEtw, SmbServerShareOpenedEtw, SmbServerV1AuditEtw, ProcessRollup2])
 | !cidr(RemoteAddressIP4, subnet=["172.22.0.0/16", "192.168.0.0/16", "10.0.0.0/8"])
@@ -4113,15 +4107,13 @@ setTimeInterval(start=1h, end=0h)
 
 ---
 
-### Command 4: DNS Resolutions from Browser Processes (Windows)
-* **Objective**: Correlates process creation and subsequent DNS resolutions occurring under the exact same Falcon Unified Process ID (UPID) for Windows web browsers (Chrome, Firefox, Edge).
-* **Key Operators**: `(#event_simpleName=ProcessRollup2 OR DnsRequest)`, `wildcard(?ComputerName)`, `concat([FileName, ContextBaseFileName])`, `in(values=[chrome.exe, firefox.exe, msedge.exe])`, `selfJoinFilter([aid, falconPID])`
+### Command 4: Browser Process DNS Resolutions (Windows)
+* **Category**: Browser & DNS (Windows)
+* **Objective**: Eliminates DNS ambiguity by conclusively proving which specific browser process instance resolved a domain, essential for tracking drive-by downloads, malicious redirects, and phishing sites.
+* **Key Operators**: `(#event_simpleName=ProcessRollup2 OR DnsRequest), wildcard(?ComputerName), concat([FileName, ContextBaseFileName]), in(values=[chrome.exe, firefox.exe, msedge.exe]), selfJoinFilter([aid, falconPID])`
+* **Parameters & Scope**: Supports interactive query filtering with ComputerName=~wildcard(?ComputerName, ignoreCase=true) in Falcon console.
 
 ```cql
-// ==============================================================================
-// 4. DNS RESOLUTIONS FROM BROWSER PROCESSES (WINDOWS)
-// Correlates ProcessRollup2 & DnsRequest under the same Falcon UPID on Windows
-// ==============================================================================
 (#event_simpleName=ProcessRollup2 OR #event_simpleName=DnsRequest) event_platform=Win
 | ComputerName=~wildcard(?ComputerName, ignoreCase=true)
 // Normalize file name value across both events
@@ -4138,15 +4130,13 @@ setTimeInterval(start=1h, end=0h)
 
 ---
 
-### Command 5: DNS Resolutions from Browser Processes (macOS)
-* **Objective**: Correlates process execution and DNS resolutions for macOS browsers ('Google Chrome', 'firefox', 'Safari', 'edge') linked strictly under the same Falcon UPID.
-* **Key Operators**: `(#event_simpleName=ProcessRollup2 OR DnsRequest)`, `event_platform=Mac`, `in(values=['Google Chrome', 'firefox', 'Safari', 'edge'])`, `selfJoinFilter([aid, falconPID])`, `groupBy([aid, falconPID])`
+### Command 5: Browser Process DNS Resolutions (macOS)
+* **Category**: Browser & DNS (macOS)
+* **Objective**: Forensic domain attribution on macOS endpoints. Confirms which macOS browser application initiated external DNS queries to differentiate user web navigation from system background daemons.
+* **Key Operators**: `(#event_simpleName=ProcessRollup2 OR DnsRequest), event_platform=Mac, in(values=['Google Chrome', 'firefox', 'Safari', 'edge']), selfJoinFilter([aid, falconPID]), groupBy([aid, falconPID])`
+* **Parameters & Scope**: Matches macOS application process names (including spaces). Groups by agent ID and Falcon PID.
 
 ```cql
-// ==============================================================================
-// 5. DNS RESOLUTIONS FROM BROWSER PROCESSES (MACOS)
-// Correlates ProcessRollup2 & DnsRequest under the same Falcon UPID on macOS
-// ==============================================================================
 (#event_simpleName=ProcessRollup2 OR #event_simpleName=DnsRequest) event_platform=Mac
 | ComputerName=~wildcard(?ComputerName, ignoreCase=true)
 // Normalize file name value across both events
@@ -4161,3 +4151,177 @@ setTimeInterval(start=1h, end=0h)
 | groupBy([aid, falconPID], function=[collect([ComputerName, host.os.platform, UserName, fileName, DomainName])])
 ```
 
+---
+
+### Command 6: Detection of DoH Traffic to Known Resolvers (DNS over HTTPS Evasion)
+* **Category**: Browser & DNS (Multi-OS)
+* **Objective**: Uncovers potential evasion where malware, unauthorized browsers, or encrypted proxies query public DoH resolvers (Cloudflare, Google, Quad9) to resolve C2 domains out-of-band.
+* **Key Operators**: `#event_simpleName=DnsRequest, in(field=DomainName, values=[...]), groupBy([ComputerName, ContextBaseFileName])`
+* **Parameters & Scope**: Filters for cloudflare-dns.com, dns.google, dns.quad9.net, mozilla.cloudflare-dns.com. Expand with additional DoH providers as needed.
+
+```cql
+#event_simpleName=DnsRequest
+| in(field="DomainName", values=["cloudflare-dns.com", "dns.google", "dns.quad9.net", "mozilla.cloudflare-dns.com"])
+| groupBy([ComputerName, ContextBaseFileName])
+```
+
+---
+
+### Command 7: Credential Access & LSASS Memory Extraction (Mimikatz / Procdump)
+* **Category**: Process & Lineage (Windows)
+* **Objective**: Surfaces in-memory credential harvesting attempts while filtering out legitimate shells and correlating parent binary lineage to detect injected or renamed attack tools.
+* **Key Operators**: `ProcessRollup2 regex matching (CommandLine, ImageFileName), ParentImageFileName exclusion, join({UserIdentity}, mode=left), join({SyntheticProcessRollup2}, mode=left), table()`
+* **Parameters & Scope**: Excludes cmd.exe/powershell.exe direct parents. Correlates aid with AuthenticationId and ParentProcessId.
+
+```cql
+#event_simpleName=ProcessRollup2
+| (CommandLine=/mimikatz|procdump|lsass|sekurlsa/i OR ImageFileName=/\\(mimikatz|procdump|pwdump)\.exe$/i)
+| ParentImageFileName!=/\\(powershell|cmd)\.exe$/i
+| join({#event_simpleName=UserIdentity}, field=[aid, AuthenticationId], include=[UserName], mode=left)
+| join({#event_simpleName=SyntheticProcessRollup2 | ParentSHA256HashData := SHA256HashData},
+      field=[aid, ParentProcessId], key=[aid, TargetProcessId], include=[ParentSHA256HashData], mode=left)
+| table([aid, UserName, ImageFileName, CommandLine, ParentImageFileName, SHA256HashData, ParentSHA256HashData])
+```
+
+---
+
+### Command 8: SSH Connection Ingress & Remote Session Tracking (Environment Variables)
+* **Category**: Exploitation & Network (Multi-OS)
+* **Objective**: Traces inbound SSH connections across Linux and macOS workloads, mapping remote IP addresses and ports to the authenticated user and process context.
+* **Key Operators**: `CriticalEnvironmentVariableChanged, EnvironmentVariableName regex, regex capture groups (?<localIP>), table(), format() for dynamic Process Explorer hyperlinking`
+* **Parameters & Scope**: Targets SSH_CONNECTION and USER variables. Generates direct clickable Process Explorer links formatted with aid and ContextProcessId.
+
+```cql
+#event_simpleName=CriticalEnvironmentVariableChanged
+| EnvironmentVariableName=/(SSH_CONNECTION|USER)/
+| EnvironmentVariableValue=/(?<localIP>\d+\.\d+\.\d+\.\d+)\s+(?<localPort>\d+)\s+(?<remoteIP>\d+\.\d+\.\d+\.\d+)\s+(?<remotePort>\d+)$/i
+| table([@timestamp, aid, userName, remoteIP, remotePort, localIP, localPort])
+| "Process Explorer" := format("[Process Explorer](https://falcon.crowdstrike.com/investigate/process-explorer/%s/%s)", field=[aid, ContextProcessId])
+```
+
+---
+
+### Command 9: PowerShell Encoded Command De-obfuscation & Remote URL Extraction
+* **Category**: Process & Lineage (Windows)
+* **Objective**: Dissects living-off-the-land PowerShell cradle scripts, automatically unwrapping multi-layer Base64 payloads to reveal stagers and malicious download URLs.
+* **Key Operators**: `ProcessRollup2, splitString(), base64Decode(charset='UTF-16LE'), recursive case{} logic, regex URL filter, stats([count(distinct=true)]), sort()`
+* **Parameters & Scope**: Extracts UTF-16LE Base64 payloads. Handles recursive nested `-EncodedCommand` wrappers. Filters specifically for http:// or https:// stager references.
+
+```cql
+#event_simpleName=ProcessRollup2 event_platform=Win ImageFileName=/.*\\powershell\.exe/
+| CommandLine=/.*\s+\-(e|encoded|encodedcommand|enc)\s+.*/
+| length("CommandLine", as="cmdLength")
+| groupBy([CommandLine], function=stats([count(aid, distinct=true, as="uniqueEndpointCount"), count(aid, as="executionCount")]), limit=max)
+| EncodedString := splitString(field=CommandLine, by="-e* ", index=1)
+| CmdLinePrefix := splitString(field=CommandLine, by="-e* ", index=0)
+| DecodedString := base64Decode(EncodedString, charset="UTF-16LE")
+// Look for encoded messages in the decoded message and decode those too
+| case {
+    DecodedString = /encoded/i
+    | SubEncodedString := splitString(field=DecodedString, by="-EncodedCommand ", index=1)
+    | SubCmdLinePrefix := splitString(field=EncodedString, by="-EncodedCommand ", index=0)
+    | SubDecodedString := base64Decode(SubEncodedString, charset="UTF-16LE");
+    *
+  }
+| DecodedString=/.*https?\:\/\/.*/
+| table([executionCount, uniqueEndpointCount, DecodedString, CommandLine])
+| sort(executionCount, order=desc)
+```
+
+---
+
+### Command 10: Generative AI & Cloud LLM Domain Access (Host & Platform Audit)
+* **Category**: Browser & DNS (Multi-OS)
+* **Objective**: Identifies Shadow AI adoption, sensitive intellectual property exfiltration risks, and non-approved coding assistants across Windows, macOS, and Linux endpoints.
+* **Key Operators**: `DnsRequest, in(field=DomainName, values=[50+ AI domains]), groupBy([DomainName, ComputerName, event_platform]), sort(_count, order=desc)`
+* **Parameters & Scope**: Includes major LLM web apps and developer API endpoints (api.openai.com, api.anthropic.com, console.anthropic.com, cursor.so, lovable.ai, v0.dev, etc.).
+
+```cql
+#event_simpleName=DnsRequest
+| in(field=DomainName, values=[".ai", ".ai21.com", ".aleph-alpha.com", ".anthropic.com", ".assemblyai.com", ".bolt.ai", ".bubble.io", ".character.ai", ".claude.ai", ".clickup.com", ".codeium.com", ".cohere.ai", ".copy.ai", ".cursor.so", ".deepmind.com", ".deepseek.ai", ".deepl.com", ".dalle.ai", ".elevenlabs.io", ".feedhive.io", ".forefront.ai", ".grok.x.ai", ".gpt3.com", ".huggingface.co", ".inflection.ai", ".jasper.ai", ".llama.ai", ".looka.com", ".lovable.ai", ".midjourney.com", ".mistral.ai", ".openai.com", ".opus.ai", ".perplexity.ai", ".pi.ai", ".poe.com", ".replicate.com", ".runwayml.com", ".rytr.me", ".scale.com", ".stability.ai", ".sudowrite.com", ".synthesia.io", ".tabnine.com", ".together.ai", ".v0.dev", ".vercel.ai", ".vista.social", ".wordtune.com", ".writesonic.com", ".x.ai", ".you.com", "ai21.com", "aleph-alpha.com", "anthropic.com", "api.anthropic.com", "api.openai.com", "assemblyai.com", "bard.google.com", "bedrock.aws.amazon.com", "bolt.ai", "bubble.io", "character.ai", "chat.openai.com", "chatgpt.com", "claude.ai", "clickup.com", "codeium.com", "cohere.ai", "console.anthropic.com", "copilot.github.com", "copilot.microsoft.com", "copy.ai", "cursor.so", "dalle.ai", "deepmind.com", "deepseek.ai", "deepl.com", "elevenlabs.io", "ernie.baidu.com", "feedhive.io", "forefront.ai", "gemini.google.com", "gigachat.sberbank.ru", "grok.x.ai", "gpt3.com", "huggingface.co", "inflection.ai", "jasper.ai", "labs.perplexity.ai", "llama.ai", "looka.com", "lovable.ai", "midjourney.com", "mistral.ai", "openai.com", "opus.ai", "perplexity.ai", "pi.ai", "platform.openai.com", "poe.com", "replicate.com", "runwayml.com", "rytr.me", "scale.com", "stability.ai", "sudowrite.com", "synthesia.io", "tabnine.com", "together.ai", "v0.dev", "vercel.ai", "vista.social", "wordtune.com", "writesonic.com", "x.ai", "you.com"])
+| groupBy([DomainName, ComputerName, event_platform])
+| sort(field=_count, type=number, order=desc)
+```
+
+---
+
+### Command 11: Enterprise AI Service Query Frequency (Global Domain Aggregation)
+* **Category**: Browser & DNS (Multi-OS)
+* **Objective**: Provides executive visibility into enterprise AI consumption patterns, identifying which AI services have the highest request volume for compliance and license governance.
+* **Key Operators**: `DnsRequest, in(field=DomainName, values=[...]), groupBy([DomainName]), sort(_count, order=desc)`
+* **Parameters & Scope**: Aggregates purely by DomainName for clean macro charts and top-N provider ranking.
+
+```cql
+#event_simpleName=DnsRequest
+| in(field=DomainName, values=[".ai", ".ai21.com", ".aleph-alpha.com", ".anthropic.com", ".assemblyai.com", ".bolt.ai", ".bubble.io", ".character.ai", ".claude.ai", ".clickup.com", ".codeium.com", ".cohere.ai", ".copy.ai", ".cursor.so", ".deepmind.com", ".deepseek.ai", ".deepl.com", ".dalle.ai", ".elevenlabs.io", ".feedhive.io", ".forefront.ai", ".grok.x.ai", ".gpt3.com", ".huggingface.co", ".inflection.ai", ".jasper.ai", ".llama.ai", ".looka.com", ".lovable.ai", ".midjourney.com", ".mistral.ai", ".openai.com", ".opus.ai", ".perplexity.ai", ".pi.ai", ".poe.com", ".replicate.com", ".runwayml.com", ".rytr.me", ".scale.com", ".stability.ai", ".sudowrite.com", ".synthesia.io", ".tabnine.com", ".together.ai", ".v0.dev", ".vercel.ai", ".vista.social", ".wordtune.com", ".writesonic.com", ".x.ai", ".you.com", "ai21.com", "aleph-alpha.com", "anthropic.com", "api.anthropic.com", "api.openai.com", "assemblyai.com", "bard.google.com", "bedrock.aws.amazon.com", "bolt.ai", "bubble.io", "character.ai", "chat.openai.com", "chatgpt.com", "claude.ai", "clickup.com", "codeium.com", "cohere.ai", "console.anthropic.com", "copilot.github.com", "copilot.microsoft.com", "copy.ai", "cursor.so", "dalle.ai", "deepmind.com", "deepseek.ai", "deepl.com", "elevenlabs.io", "ernie.baidu.com", "feedhive.io", "forefront.ai", "gemini.google.com", "gigachat.sberbank.ru", "grok.x.ai", "gpt3.com", "huggingface.co", "inflection.ai", "jasper.ai", "labs.perplexity.ai", "llama.ai", "looka.com", "lovable.ai", "midjourney.com", "mistral.ai", "openai.com", "opus.ai", "perplexity.ai", "pi.ai", "platform.openai.com", "poe.com", "replicate.com", "runwayml.com", "rytr.me", "scale.com", "stability.ai", "sudowrite.com", "synthesia.io", "tabnine.com", "together.ai", "v0.dev", "vercel.ai", "vista.social", "wordtune.com", "writesonic.com", "x.ai", "you.com"])
+| groupBy([DomainName])
+| sort(field=_count, type=number, order=desc)
+```
+
+---
+
+### Command 12: PowerShell Caret De-obfuscation (^) & UTF-16LE Payload Decoding
+* **Category**: Process & Lineage (Windows)
+* **Objective**: Defeats command-line obfuscation tricks (e.g. `-e^n^c`) designed to bypass static signature matching, instantly revealing the underlying script commands and executing user context.
+* **Key Operators**: `ProcessRollup2, replace('^', with=''), regex pattern with named capture group (?<b64>), base64Decode(charset='UTF-16LE'), join({UserIdentity}, mode=left)`
+* **Parameters & Scope**: Targets both Windows PowerShell (powershell.exe) and PowerShell 7 (pwsh.exe). Enriches with UserIdentity via aid and AuthenticationId.
+
+```cql
+#event_simpleName=ProcessRollup2 ImageFileName=/\\(powershell|pwsh)\.exe$/i
+| replace("\\^", with="", field=CommandLine, as=cmd)
+| cmd=/\s[-\/]e(c|nc?[a-z]*)?\s+(?<b64>[A-Za-z0-9+\/=]{16,})/i
+| decoded := base64Decode(b64, charset="UTF-16LE")
+| join({#event_simpleName=UserIdentity}, field=[aid, AuthenticationId], include=[UserName], mode=left)
+| table([aid, UserName, ParentImageFileName, ImageFileName, CommandLine, decoded])
+```
+
+---
+
+### Command 13: External Network Connections Correlated to Originating Process
+* **Category**: Exploitation & Network (Windows)
+* **Objective**: Pinpoints rogue binaries or living-off-the-land binaries (LOLBins) initiating external Internet connections, aggregating socket details by user and process binary.
+* **Key Operators**: `NetworkConnectIP4, !cidr(subnet=[10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12, 127.0.0.0/8]), join({ProcessRollup2}, field=[ContextProcessId], key=TargetProcessId, mode=left), groupBy(), collect()`
+* **Parameters & Scope**: Excludes private internal subnets. Correlates ContextProcessId with TargetProcessId to bridge network ETW and process rollup telemetry.
+
+```cql
+#event_simpleName=NetworkConnectIP4 aid=?aid ComputerName=?Computername RemoteAddressIP4=?RemoteIP 
+| !cidr(RemoteAddressIP4, subnet=["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12", "127.0.0.0/8"])
+| join({#event_simpleName=ProcessRollup2 FileName=?Processname}, field=[ContextProcessId], key=TargetProcessId, include=[FileName, UserName, ImageFileName, RemoteAddressIP4, RemotePort, CommandLine], mode=left)
+| groupBy(UserName, function=collect([FileName, UserName, ComputerName, ImageFileName, RemoteAddressIP4, RemotePort, CommandLine]))
+| sort(_count, order=asc)
+```
+
+---
+
+### Command 14: Logon Failure Spike & Account Spraying Correlation
+* **Category**: Authentication (Windows)
+* **Objective**: Differentiates benign user typos from targeted password spray or credential brute-forcing, detailing first/last failed attempts, successful logins, host targets, and password age.
+* **Key Operators**: `case{#event_simpleName=UserLogon...}, groupBy([UserSid, UserName]), min/max timestamps, count(), selectFromMax(), $falcon/helper:enrich(), formatTime(), default()`
+* **Parameters & Scope**: Threshold: TotalFailedLogins > 3. Automatically formats timestamps in EST/UTC. Enriches UserLogonFlags via Falcon helper module.
+
+```cql
+#event_simpleName=/UserLogon/
+| case {
+    #event_simpleName=UserLogon | SuccessLogonTime := ContextTimeStamp;
+    #event_simpleName=UserLogonFailed2 | FailedLogonTime := ContextTimeStamp;
+  }
+| groupBy([UserSid, UserName], function=[
+    min(FailedLogonTime, as=FirstFailedLogon),
+    max(FailedLogonTime, as=LastFailedLogon),
+    max(SuccessLogonTime, as=LastSuccessfulLogin),
+    count(SuccessLogonTime, as=TotalSuccessfulLogins),
+    count(FailedLogonTime, as=TotalFailedLogins),
+    selectFromMax(field="@timestamp", include=[PasswordLastSet]),
+    {#event_simpleName=UserLogon | selectFromMax(field="@timestamp", include=[ComputerName]) | rename(field="ComputerName", as="LastLoggedOnHost")}
+  ])
+| TotalFailedLogins > 3
+| $falcon/helper:enrich(field=UserLogonFlags)
+| formatTime(format="%F %T", field=FirstFailedLogon, as="FirstFailedLogon", timezone="EST")
+| formatTime(format="%F %T", field=LastFailedLogon, as="LastFailedLogon", timezone="EST")
+| formatTime(format="%F %T", field=LastSuccessfulLogin, as="LastSuccessfulLogin", timezone="EST")
+| PasswordLastSet := PasswordLastSet * 1000 | formatTime(format="%F %T", field=PasswordLastSet, as="PasswordLastSet", timezone="EST")
+| default(value="-", field=[FirstFailedLogon, LastFailedLogon, LastSuccessfulLogin, TotalSuccessfulLogins, TotalFailedLogins, PasswordLastSet, LastLoggedOnHost])
+| sort(TotalFailedLogins, order=desc, limit=20000)
+```
+
+---
