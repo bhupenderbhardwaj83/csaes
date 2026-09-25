@@ -1468,3 +1468,22 @@ The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation c
   | table([BrowserExtensionName, TotalEndpoints, BrowserName, "Chrome Store Link"])
   | sort(TotalEndpoints, order=asc, limit=50)
   ```
+
+- **Exchange Online BEC Inbox Rule Risk Distribution (Playbook 19)**:
+  Plot rule risk classifications in a Stacked Bar or Donut Chart to isolate high-risk external mail forwarding and silent deletion rules:
+  ```cql
+  | groupBy([RiskLevel], function=count(as=RuleCount))
+  | sort(RuleCount, order=desc)
+  ```
+
+- **Active Directory Audit Event Breakdown (Playbook 21)**:
+  Track account lifecycle anomalies, lockout frequency, and password resets over time using a Time-Chart Area graph:
+  ```cql
+  | timeChart(span=1h, function=count(), by=ActiveDirectoryAuditAction)
+  ```
+
+- **Real Time Response (RTR) Session Activity Timeline (Playbook 22)**:
+  Plot responder RTR session starts across endpoints over time to audit incident response access:
+  ```cql
+  | timeChart(span=1d, function=count(), by=UserName)
+  ```

@@ -4348,7 +4348,7 @@ setTimeInterval(start=1h, end=0h)
 ### Command 16: Phishing Links & Browser Processes Spawned from Outlook
 * **Category**: Process & Lineage (Windows)
 * **Objective**: Surfaces spear-phishing click-throughs, capturing the destination URL or launch arguments from the child browser command line and recording the browser binary MD5 hash.
-* **Key Operators**: `#event_simpleName=ProcessRollup2, ImageFileName=/\\outlook\.exe/i, regex() extraction, join(key=ParentProcessId, field=TargetProcessId, mode=left), groupBy()`
+* **Key Operators**: `#event_simpleName=ProcessRollup2, ImageFileName=/\\outlook\.exe/i, regex(/(?<FileName>[^\\\/]+)$/), join(key=ParentProcessId, field=TargetProcessId, mode=left), groupBy()`
 * **Parameters & Scope**: Supports optional interactive query filtering on ?aid. Joins child browser execution on TargetProcessId = ParentProcessId.
 
 ```cql
@@ -4407,6 +4407,125 @@ setTimeInterval(start=1h, end=0h)
     BrowserName="4" | BrowserName := "Edge" ;
     *
   }
+```
+
+---
+
+### Command 19: Exchange Online Inbox Rule Modification & BEC Exfiltration Risk Ranking
+* **Category**: Authentication (Cloud / M365)
+* **Objective**: Surfaces Business Email Compromise (BEC) account takeover tactics where attackers plant forwarding or deletion rules to hijack invoices, intercept 2FA codes, or hide security alert notifications.
+* **Key Operators**: `#event.dataset=m365.exchange, event.action=/^(New|Set)-InboxRule$/, coalesce(), regex(), lowercase(), case{ test(ForwardDomain != ActorDomain)... }, table(), sort()`
+* **Parameters & Scope**: Ingests Microsoft 365 Exchange audit logs. Compares recipient domain with user's domain. Filters on keywords (passw, mfa, wire, payment, invoice).
+
+```cql
+#event.dataset=m365.exchange
+| #Vendor=microsoft
+| #event.outcome=success
+| event.action=/^(New|Set)-InboxRule$/
+| ForwardTo := Vendor.Parameters.ForwardTo
+| ForwardAsAttachmentTo := Vendor.Parameters.ForwardAsAttachmentTo
+| RedirectTo := Vendor.Parameters.RedirectTo
+| BlindCopyTo := Vendor.Parameters.BlindCopyTo
+| DeleteMessage := Vendor.Parameters.DeleteMessage
+| MoveToFolder := Vendor.Parameters.MoveToFolder
+| FromCondition := Vendor.Parameters.From
+| SentToCondition := Vendor.Parameters.SentTo
+| SubjectCondition := Vendor.Parameters.SubjectContainsWords
+// Set-InboxRule carries the rule name in Identity, New-InboxRule in Name
+| RuleName := coalesce([Vendor.Parameters.Name, Vendor.Parameters.Identity])
+// Vendor.MailboxAlias is usually the mailbox GUID but sometimes a full legacy path ending in that GUID
+| regex(/(?<MailboxId>[0-9a-fA-F-]{36})$/, field=Vendor.MailboxAlias, strict=false)
+// Any of the four forwarding mechanisms counts as a forward target
+| ForwardTarget := coalesce([ForwardTo, ForwardAsAttachmentTo, RedirectTo, BlindCopyTo])
+// Compare the forward target's domain with the acting mailbox's domain
+| regex(/@(?<ActorDomain>[^@]+)$/, field=user.name, strict=false)
+| regex(/@(?<ForwardDomain>[^@;,\s\]>]+)/, field=ForwardTarget, strict=false)
+| lowercase("ActorDomain")
+| lowercase("ForwardDomain")
+| case {
+    ForwardTarget=* | test(ForwardDomain != ActorDomain) | RiskLevel := "High, forwards mail to a recipient in another domain" ;
+    DeleteMessage=/(?i)^true$/ | RiskLevel := "High, silently deletes matching mail" ;
+    ForwardTarget=* | RiskLevel := "Medium, forwards a copy of mail to a recipient in the same domain" ;
+    // Rules scoped to password, sign in, security alert or payment mail are the ones BEC actors use to hide what the victim must not see
+    FromCondition=/(passw|log.?in|sign.?in|verif|authenticat|mfa|security|alert|suspicious|invoice|payment|remittance|wire|bank|iban|swift)/i
+      OR SubjectCondition=/(passw|log.?in|sign.?in|verif|authenticat|mfa|security|alert|suspicious|invoice|payment|remittance|wire|bank|iban|swift)/i
+      OR RuleName=/(passw|log.?in|sign.?in|verif|authenticat|mfa|security|alert|suspicious|invoice|payment|remittance|wire|bank|iban|swift)/i
+      | RiskLevel := "Medium, rule targets password, security or payment related mail" ;
+    MoveToFolder=* | RiskLevel := "Review, moves mail out of the inbox, folder name may not reflect intent" ;
+    // Set-InboxRule only logs the parameters that were changed, so a condition-only edit hides the rule's action
+    event.action=Set-InboxRule | RiskLevel := "Review, existing rule modified, its action is not part of this event" ;
+    * | RiskLevel := "Review, other inbox rule change"
+  }
+| table([@timestamp, user.name, MailboxId, source.ip, event.action, RuleName, FromCondition, SentToCondition, SubjectCondition, ForwardTarget, DeleteMessage, MoveToFolder, RiskLevel])
+| sort(@timestamp, order=desc, limit=1000)
+```
+
+---
+
+### Command 20: Scheduled Task XML Parsing & Principal User ID Attribution
+* **Category**: Process & Lineage (Windows)
+* **Objective**: Uncovers persistence mechanisms and privilege escalation by identifying scheduled tasks configured to execute under privileged service accounts or anomalous user SIDs.
+* **Key Operators**: `#event_simpleName=ScheduledTaskRegistered, parseXml(TaskXml), UserId := rename(Task.Principals.Principal.UserId), table([aid, UserId, TaskXml], limit=1000)`
+* **Parameters & Scope**: Targets Windows ScheduledTaskRegistered telemetry. Parses embedded XML schema to expose deep principal attributes.
+
+```cql
+#event_simpleName=ScheduledTaskRegistered
+| parseXml(TaskXml)
+| UserId := rename(Task.Principals.Principal.UserId)
+| table([aid, UserId, TaskXml], limit=1000)
+```
+
+---
+
+### Command 21: Active Directory Audit Activity Decoded (Lifecycle, Resets & Memberships)
+* **Category**: Authentication (Windows / Domain)
+* **Objective**: Monitors Active Directory domain controller security events to surface rogue account creation, unauthorized administrative group membership escalation, and anomalous password resets.
+* **Key Operators**: `name=ActiveDirectoryAudit*, case{ ActiveDirectoryAuditActionType == ... }, groupBy(), sort(@timestamp, limit=20000)`
+* **Parameters & Scope**: Decodes action type integers: 0=CREATED, 1=DELETED, 2=MODIFIED, 4=GROUP_MEMBER_ADDED, 8=GROUP_MEMBER_REMOVED, 16=PASSWORD_CHANGE, 32=PASSWORD_RESET, 64=ENABLED, 128=DISABLED, 256=LOCKED, 512=UNLOCKED.
+
+```cql
+name=ActiveDirectoryAudit*
+| case {
+    ActiveDirectoryAuditActionType == 0   | ActiveDirectoryAuditAction := "CREATED" ;
+    ActiveDirectoryAuditActionType == 1   | ActiveDirectoryAuditAction := "DELETED" ;
+    ActiveDirectoryAuditActionType == 2   | ActiveDirectoryAuditAction := "MODIFIED" ;
+    ActiveDirectoryAuditActionType == 4   | ActiveDirectoryAuditAction := "GROUP_MEMBER_ADDED" ;
+    ActiveDirectoryAuditActionType == 8   | ActiveDirectoryAuditAction := "GROUP_MEMBER_REMOVED" ;
+    ActiveDirectoryAuditActionType == 16  | ActiveDirectoryAuditAction := "PASSWORD_CHANGE" ;
+    ActiveDirectoryAuditActionType == 32  | ActiveDirectoryAuditAction := "PASSWORD_RESET" ;
+    ActiveDirectoryAuditActionType == 64  | ActiveDirectoryAuditAction := "ENABLED" ;
+    ActiveDirectoryAuditActionType == 128 | ActiveDirectoryAuditAction := "DISABLED" ;
+    ActiveDirectoryAuditActionType == 256 | ActiveDirectoryAuditAction := "LOCKED" ;
+    ActiveDirectoryAuditActionType == 512 | ActiveDirectoryAuditAction := "UNLOCKED" ;
+    * | ActiveDirectoryAuditAction := "UNKNOWN"
+  }
+| groupBy([@timestamp, ActiveDirectoryAuditAction, ComputerName, TargetDomainControllerHostName, DetectName, Severity, AddedPrivileges, GroupMemberAccountName, PerformedOnAccountName, PerformedByAccountObjectName])
+| sort(@timestamp, limit=20000)
+```
+
+---
+
+### Command 22: Falcon Real Time Response (RTR) Session Auditing & AID Enrichment
+* **Category**: Process & Lineage (Multi-OS)
+* **Objective**: Provides an immutable audit log of incident responder and administrative console access to endpoints, converting session start timestamps to human-readable format.
+* **Key Operators**: `#repo=detections, #event_simpleName=Event_RemoteResponseSessionStartEvent, rename(field='AgentIdString', as='aid'), table(), aid=~match(file='aid_master_main.csv'), formatTime()`
+* **Parameters & Scope**: Targets CrowdStrike detections repository. Enriches with internal asset management aid_master_main.csv lookup file.
+
+```cql
+// Get RTR Start events
+#repo=detections #event_simpleName=Event_RemoteResponseSessionStartEvent
+
+// Rename Agent ID value
+| rename(field="AgentIdString", as="aid")
+
+// Display results in table
+| table([StartTimestamp, UserName, aid], limit=20000)
+
+// Bring in data from AID Master lookup file
+| aid=~match(file="aid_master_main.csv", column=[aid], strict=false)
+
+// Convert timestamp to human-readable value
+| formatTime(format="%F %T %Z", as=StartTimestamp, field=StartTimestamp)
 ```
 
 ---
