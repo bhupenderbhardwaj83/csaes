@@ -4325,3 +4325,88 @@ setTimeInterval(start=1h, end=0h)
 ```
 
 ---
+
+### Command 15: Removable Media Data Exfiltration Volume Tracking (USB & External Drives)
+* **Category**: Exploitation & Network (Multi-OS)
+* **Objective**: Detects insider threat data exfiltration attempts and unapproved removable storage usage for corporate compliance and DLP governance.
+* **Key Operators**: `#event_simpleName=/Written/, IsOnRemovableDisk=1, unit:convert(Size, to=M), groupBy([ComputerName]), sum(Size), count(TargetFileName), collect()`
+* **Parameters & Scope**: Filters for any event containing 'Written' where IsOnRemovableDisk=1. Converts raw byte size to Megabytes.
+
+```cql
+#event_simpleName=/Written/ IsOnRemovableDisk=1 
+| FileSizeMB := unit:convert(Size, to=M) 
+| groupBy([ComputerName], function=[
+    sum(Size, as=SizeBytes),
+    sum(FileSizeMB, as=FileSizeMB),
+    count(TargetFileName, as="File Count"),
+    collect([TargetFileName])
+  ])
+```
+
+---
+
+### Command 16: Phishing Links & Browser Processes Spawned from Outlook
+* **Category**: Process & Lineage (Windows)
+* **Objective**: Surfaces spear-phishing click-throughs, capturing the destination URL or launch arguments from the child browser command line and recording the browser binary MD5 hash.
+* **Key Operators**: `#event_simpleName=ProcessRollup2, ImageFileName=/\\outlook\.exe/i, regex() extraction, join(key=ParentProcessId, field=TargetProcessId, mode=left), groupBy()`
+* **Parameters & Scope**: Supports optional interactive query filtering on ?aid. Joins child browser execution on TargetProcessId = ParentProcessId.
+
+```cql
+#event_simpleName=ProcessRollup2 
+| aid=?aid ImageFileName=/\\outlook\.exe/i
+| regex("(?<FileName>[^\/|\\]*)$", field=ImageFileName, strict=false)
+| join(
+    {
+      #event_simpleName=ProcessRollup2 ImageFileName=/(chrome|firefox|iexplore)\.exe/i
+      | MD5 := MD5HashData | ImageFileName=/(\/|\\)(?<ChildFileName>\w*\.?\w*)$/ 
+      | ChildCLI := CommandLine
+    }, 
+    key=ParentProcessId, field=TargetProcessId, include=[MD5, ChildFileName, ChildCLI]
+  ) 
+| groupBy([aid, FileName, CommandLine, ChildFileName, ChildCLI, MD5], limit=max)
+```
+
+---
+
+### Command 17: Inbound RDP Exposure to Internet & Public Brute-Force Activity
+* **Category**: Exploitation & Network (Windows)
+* **Objective**: Exposes unshielded RDP servers exposed to the Internet, dropping private, loopback, link-local, and carrier-grade NAT (CGNAT) subnets to isolate external scanner and attack traffic.
+* **Key Operators**: `#event_simpleName=NetworkReceiveAcceptIP4, LocalPort=3389, !cidr(RemoteAddressIP4, subnet=[...]), groupBy([ComputerName, aip]), distinct count, collect(), formatTime(), sort()`
+* **Parameters & Scope**: Excludes private subnets: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16, 100.64.0.0/10. Aggregates top public sources.
+
+```cql
+#event_simpleName=NetworkReceiveAcceptIP4 event_platform=Win
+| LocalPort=3389
+// Drop private, loopback, link-local and CGNAT source ranges
+| !cidr(RemoteAddressIP4, subnet=["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16", "100.64.0.0/10"])
+| groupBy([ComputerName, aip], function=[
+    count(as=TotalAccepts),
+    count(RemoteAddressIP4, distinct=true, as=UniqueRemoteIPs),
+    collect([RemoteAddressIP4], limit=20),
+    max(@timestamp, as=LastSeen)
+  ])
+| formatTime("%Y-%m-%d %H:%M:%S", field=LastSeen, as=LastSeen)
+| sort(UniqueRemoteIPs, order=desc, limit=200)
+```
+
+---
+
+### Command 18: Installed Browser Extensions Inventory & Chrome Store Verification
+* **Category**: Browser & DNS (Multi-OS)
+* **Objective**: Hunts for malicious browser extensions, ad-injectors, and unauthorized developer addons. Generates direct clickable links for instant verification in the official Google Web Store.
+* **Key Operators**: `#event_simpleName=InstalledBrowserExtension, BrowserExtensionId!='no-extension-available', groupBy(), count(aid, distinct=true), format(), case{ BrowserName='3'... }, sort()`
+* **Parameters & Scope**: Translates BrowserName '3' -> Chrome and '4' -> Edge. Generates clickable Chrome Web Store verification link from BrowserExtensionId.
+
+```cql
+#event_simpleName=InstalledBrowserExtension BrowserExtensionId!="no-extension-available"
+| groupBy([event_platform, BrowserName, BrowserExtensionId, BrowserExtensionName], function=[count(aid, distinct=true, as=TotalEndpoints)])
+| format("[See Extension](https://chromewebstore.google.com/detail/%s)", field=[BrowserExtensionId], as="Chrome Store Link")
+| sort(TotalEndpoints, order=desc, limit=1000)
+| case {
+    BrowserName="3" | BrowserName := "Chrome" ;
+    BrowserName="4" | BrowserName := "Edge" ;
+    *
+  }
+```
+
+---

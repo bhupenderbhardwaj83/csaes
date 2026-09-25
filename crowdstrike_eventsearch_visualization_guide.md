@@ -1447,3 +1447,24 @@ The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation c
   | table([UserName, LastLoggedOnHost, TotalFailedLogins, TotalSuccessfulLogins])
   | sort(TotalFailedLogins, order=desc)
   ```
+
+- **Removable Media Data Transfer Volume (Playbook 15)**:
+  Track total megabytes written to external USB drives across endpoints using a Top-10 Bar Chart:
+  ```cql
+  | groupBy([ComputerName], function=sum(FileSizeMB, as=TotalMB))
+  | sort(TotalMB, order=desc, limit=10)
+  ```
+
+- **Public Inbound RDP Accept Distribution (Playbook 17)**:
+  Visualize external brute-force source IP addresses targeting port 3389 using an Area Chart or World Heatmap:
+  ```cql
+  | groupBy([RemoteAddressIP4], function=count(as=ConnectionAttempts))
+  | sort(ConnectionAttempts, order=desc, limit=20)
+  ```
+
+- **Installed Browser Extension Prevalence (Playbook 18)**:
+  Identify anomalous or rare browser extensions by plotting endpoint install counts in a Pareto Chart:
+  ```cql
+  | table([BrowserExtensionName, TotalEndpoints, BrowserName, "Chrome Store Link"])
+  | sort(TotalEndpoints, order=asc, limit=50)
+  ```
