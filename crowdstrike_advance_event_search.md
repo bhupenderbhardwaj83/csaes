@@ -4634,3 +4634,100 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
 ```
 
 ---
+
+### Command 27: Distributed Failed Logons Across Multiple Endpoints (Password Spraying)
+* **Category**: Authentication (Windows)
+* **Objective**: Surfaces horizontal credential spraying where threat actors test passwords across many hosts to evade single-host lockout thresholds.
+* **Key Operators**: `#event_simpleName=UserLogonFailed, groupBy(UserName), count(timestamp, distinct=true), count(aid, distinct=true), collect(), default(), sort()`
+* **Parameters & Scope**: Thresholds: uniqueFailedLogons >= 5 and uniqueEP >= 10. Collects affected ComputerNames and aids up to 10,000 entries.
+
+```cql
+#event_simpleName = UserLogonFailed
+| groupBy(UserName, function=([count(timestamp, distinct=true, as=uniqueFailedLogons), count(aid, distinct=true, as=uniqueEP), collect(fields=[UserName, ComputerName, aid], limit=10000)]))
+| default(field="UserName", value="-", replaceEmpty=true)
+| uniqueFailedLogons >= 5
+| uniqueEP >= 10
+| sort(uniqueEP)
+```
+
+---
+
+### Command 28: High-Risk Usernames Generating Multi-Endpoint Failed Logons
+* **Category**: Authentication (Windows)
+* **Objective**: Prioritizes user account compromise risk by ranking usernames targeted across the highest number of unique enterprise assets.
+* **Key Operators**: `#event_simpleName=UserLogonFailed, groupBy(UserName), count(distinct=true), collect(fields=[UserName]), default(), sort(uniqueEP)`
+* **Parameters & Scope**: Filters for uniqueFailedLogons >= 5 and uniqueEP >= 10. Orders by unique endpoint count.
+
+```cql
+#event_simpleName = UserLogonFailed
+| groupBy(UserName, function=([count(timestamp, distinct=true, as=uniqueFailedLogons), count(aid, distinct=true, as=uniqueEP), collect(fields=[UserName], limit=10000)]))
+| default(field="UserName", value="-", replaceEmpty=true)
+| uniqueFailedLogons >= 5
+| uniqueEP >= 10
+| sort(uniqueEP)
+```
+
+---
+
+### Command 29: Compromise Verification: Authentication Failures Followed by Successful Logon
+* **Category**: Authentication (Windows)
+* **Objective**: Pinpoints verified account takeovers by sorting users with high failure volume who subsequently established a successful session.
+* **Key Operators**: `case{#event_simpleName=UserLogon...}, groupBy([UserSid, UserName]), min/max timestamps, $falcon/helper:enrich(UserLogonFlags), formatTime(), sort(TotalSuccessfulLogins, order=desc)`
+* **Parameters & Scope**: Sorts by TotalSuccessfulLogins descending to bubble up successful breach attempts following failed brute-force attacks.
+
+```cql
+#event_simpleName=/UserLogon/
+| case {
+    #event_simpleName=UserLogon | SuccessLogonTime := ContextTimeStamp ;
+    #event_simpleName=UserLogonFailed2 | FailedLogonTime := ContextTimeStamp ;
+  }
+| groupBy([UserSid, UserName], function=([
+    min(FailedLogonTime, as=FirstFailedLogon),
+    max(FailedLogonTime, as=LastFailedLogon),
+    max(SuccessLogonTime, as=LastSuccessfulLogin),
+    count(SuccessLogonTime, as=TotalSuccessfulLogins),
+    count(FailedLogonTime, as=TotalFailedLogins),
+    selectFromMax(field="@timestamp", include=[PasswordLastSet]),
+    {#event_simpleName=UserLogon | selectFromMax(field="@timestamp", include=[ComputerName]) | rename(field="ComputerName", as="LastLoggedOnHost")}
+  ]))
+| TotalFailedLogins > 3
+| $falcon/helper:enrich(field=UserLogonFlags)
+| formatTime(format="%F %T", field=FirstFailedLogon, as="FirstFailedLogon", timezone="EST")
+| formatTime(format="%F %T", field=LastFailedLogon, as="LastFailedLogon", timezone="EST")
+| formatTime(format="%F %T", field=LastSuccessfulLogin, as="LastSuccessfulLogin", timezone="EST")
+| PasswordLastSet := PasswordLastSet * 1000 | formatTime(format="%F %T", field=PasswordLastSet, as="PasswordLastSet", timezone="EST")
+| default(value="-", field=[FirstFailedLogon, LastFailedLogon, LastSuccessfulLogin, TotalSuccessfulLogins, TotalFailedLogins, PasswordLastSet, LastLoggedOnHost])
+// Sort by total successful to see if there was successful compromise
+| sort(TotalSuccessfulLogins, order=desc, limit=20000)
+```
+
+---
+
+### Command 30: High-Volume Rapid SMB File Copy / Ransomware Staging (Defender for Identity)
+* **Category**: Exploitation & Network (Cloud / M365)
+* **Objective**: Hunts for automated lateral file harvesting and ransomware file staging across domain controllers and file servers via Microsoft Defender for Identity telemetry.
+* **Key Operators**: `#Vendor='microsoft', #event.module='defender-identity', groupBy([user.name, source.address]), time_diff_min := (end_time - start_time) / 60000, formatTime(), sort()`
+* **Parameters & Scope**: Thresholds: file_copies > 50 and time_diff_min <= 10. Formats timestamps to UTC and drops intermediate epoch values.
+
+```cql
+#Vendor = "microsoft"
+| #event.module = "defender-identity"
+| Vendor.category = "AdvancedHunting-IdentityDirectoryEvents"
+| Vendor.properties.ActionType = "SMB file copy"
+| groupBy([user.name, source.address], function=[
+    count(as=file_copies),
+    collect(fields=Vendor.properties.DestinationDeviceName),
+    collect(fields=Vendor.properties.DeviceName),
+    min(@timestamp, as=start_time),
+    max(@timestamp, as=end_time)
+  ])
+| file_copies > 50
+| time_diff_min := (end_time - start_time) / 60000
+| time_diff_min <= 10
+| start_time_fmt := formatTime("%Y-%m-%d %H:%M:%S", field=start_time, timezone="UTC")
+| end_time_fmt := formatTime("%Y-%m-%d %H:%M:%S", field=end_time, timezone="UTC")
+| drop([start_time, end_time])
+| sort(file_copies, order=desc)
+```
+
+---

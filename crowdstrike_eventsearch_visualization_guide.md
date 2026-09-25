@@ -1441,11 +1441,18 @@ The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation c
   | sort(executionCount, order=desc)
   ```
 
-- **Account Brute-Force & Password Spray Sankey (Playbook 14)**:
-  Feed `TotalFailedLogins`, `UserName`, and `LastLoggedOnHost` into a Sankey flow diagram to visualize attacker credential spraying distribution across target machines:
+- **Account Brute-Force & Password Spray Sankey (Playbooks 14 & 29)**:
+  Feed `TotalFailedLogins`, `UserName`, and `LastLoggedOnHost` into a Sankey flow diagram to visualize attacker credential spraying distribution and isolate verified breaches (`TotalSuccessfulLogins > 0`):
   ```cql
   | table([UserName, LastLoggedOnHost, TotalFailedLogins, TotalSuccessfulLogins])
-  | sort(TotalFailedLogins, order=desc)
+  | sort(TotalSuccessfulLogins, order=desc)
+  ```
+
+- **Distributed Password Spray Host Spread (Playbooks 27 & 28)**:
+  Display high-volume multi-endpoint spray attempts using a Bubble Chart plotting `uniqueEP` vs `uniqueFailedLogons` per `UserName`:
+  ```cql
+  | table([UserName, uniqueEP, uniqueFailedLogons])
+  | sort(uniqueEP, order=desc)
   ```
 
 - **Removable Media Data Transfer Volume (Playbook 15)**:
@@ -1482,7 +1489,7 @@ The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation c
   | timeChart(span=1h, function=count(), by=ActiveDirectoryAuditActionType)
   ```
 
-- **Real Time Response (RTR) Session Activity Timeline (Playbook 22)**:
+- **Real Time Response (RTR) Session Activity Timeline (Playbooks 22, 24, 25 & 26)**:
   Plot responder RTR session starts across endpoints over time to audit incident response access:
   ```cql
   | timeChart(span=1d, function=count(), by=UserName)
@@ -1496,16 +1503,9 @@ The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation c
   | groupBy([event_platform])
   ```
 
-- **Real Time Response (RTR) High-Risk Command Exposure (Playbook 24)**:
-  Display high-risk command execution frequency per user and system count in a Bar Chart or multi-line table:
+- **High-Velocity SMB File Copy Bursts (Playbook 30)**:
+  Monitor rapid lateral file movement bursts via a Bar Chart plotting `file_copies` and `time_diff_min` grouped by `user.name`:
   ```cql
-  | table([UserName, SystemsAccessed, Commands])
-  | sort(SystemsAccessed, order=desc)
-  ```
-
-- **RTR Admin Session Forensics: Destination Host & Command Log (Playbooks 25 & 26)**:
-  Structured tabular audit timeline mapping operator sessions to destination systems and command payloads:
-  ```cql
-  | table([@timestamp, UserName, DestinationHost, Commands])
-  | sort(@timestamp, order=desc)
+  | table([user.name, source.address, file_copies, time_diff_min, start_time_fmt, end_time_fmt])
+  | sort(file_copies, order=desc)
   ```
