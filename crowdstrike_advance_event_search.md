@@ -4354,7 +4354,7 @@ setTimeInterval(start=1h, end=0h)
 ```cql
 #event_simpleName=ProcessRollup2 
 | aid=?aid ImageFileName=/\\outlook\.exe/i
-| regex("(?<FileName>[^\/|\\]*)$", field=ImageFileName, strict=false)
+| regex(/(?<FileName>[^\\/]+)$/, field=ImageFileName, strict=false)
 | join(
     {
       #event_simpleName=ProcessRollup2 ImageFileName=/(chrome|firefox|iexplore)\.exe/i
