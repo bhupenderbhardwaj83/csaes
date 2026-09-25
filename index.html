@@ -1522,175 +1522,212 @@
     }
     
   
-    /* ==========================================================================
-       QUERY HUB DYNAMIC ACCORDION & SEARCH STYLING
+        /* ==========================================================================
+       QUERY HUB SLEEK & MINIMALISTIC STYLING
        ========================================================================== */
+    #queryhub .content-section {
+      padding: 16px 20px;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+    }
     .queryhub-header-bar {
-      margin-bottom: 24px;
+      margin-bottom: 14px;
     }
     .queryhub-search-box {
       display: flex;
-      gap: 12px;
-      margin-bottom: 16px;
+      gap: 8px;
+      margin-bottom: 10px;
       flex-wrap: wrap;
       align-items: center;
     }
     .queryhub-input-wrap {
       flex: 1;
-      min-width: 280px;
+      min-width: 260px;
       position: relative;
     }
     .queryhub-input-wrap input {
       width: 100%;
-      padding: 12px 16px 12px 42px;
-      background: var(--bg-card, #141721);
-      border: 1px solid var(--border-color, #272d3d);
-      border-radius: 8px;
-      color: var(--text-primary, #f1f5f9);
-      font-size: 0.95rem;
+      height: 35px;
+      padding: 6px 12px 6px 34px;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      color: #f1f5f9;
+      font-size: 0.84rem;
       outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      transition: border-color 0.15s, background-color 0.15s;
     }
     .queryhub-input-wrap input:focus {
-      border-color: #10b981;
-      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+      border-color: rgba(16, 185, 129, 0.5);
+      background: rgba(15, 23, 42, 0.95);
     }
     .queryhub-input-icon {
       position: absolute;
-      left: 14px;
+      left: 11px;
       top: 50%;
       transform: translateY(-50%);
-      font-size: 1.1rem;
-      opacity: 0.6;
+      font-size: 0.88rem;
+      opacity: 0.5;
       pointer-events: none;
     }
     .queryhub-btn-group {
       display: flex;
-      gap: 8px;
+      gap: 6px;
     }
     .queryhub-btn {
-      padding: 10px 16px;
-      background: var(--bg-card, #141721);
-      border: 1px solid var(--border-color, #272d3d);
+      height: 35px;
+      padding: 0 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 6px;
-      color: var(--text-secondary, #94a3b8);
-      font-size: 0.85rem;
-      font-weight: 600;
+      color: #94a3b8;
+      font-size: 0.78rem;
+      font-weight: 500;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      transition: all 0.2s;
+      gap: 5px;
+      transition: all 0.15s;
+      white-space: nowrap;
     }
     .queryhub-btn:hover {
       background: rgba(16, 185, 129, 0.1);
-      color: #10b981;
-      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.3);
     }
     .queryhub-pills {
       display: flex;
-      gap: 8px;
+      gap: 6px;
       flex-wrap: wrap;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
     .queryhub-pill {
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 14px;
+      font-size: 0.74rem;
+      font-weight: 500;
       cursor: pointer;
-      background: var(--bg-card, #141721);
-      border: 1px solid var(--border-color, #272d3d);
-      color: var(--text-secondary, #94a3b8);
-      transition: all 0.2s;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      color: #94a3b8;
+      transition: all 0.15s;
       user-select: none;
     }
-    .queryhub-pill:hover, .queryhub-pill.active {
-      background: #10b981;
-      color: #ffffff;
-      border-color: #10b981;
+    .queryhub-pill:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #f1f5f9;
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    .queryhub-pill.active {
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.35);
+      font-weight: 600;
     }
     .queryhub-list {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 6px;
     }
     .queryhub-card {
-      background: var(--bg-card, #141721);
-      border: 1px solid var(--border-color, #272d3d);
-      border-radius: 8px;
+      background: rgba(15, 20, 32, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 6px;
       overflow: hidden;
-      transition: border-color 0.25s, box-shadow 0.25s;
+      transition: background-color 0.15s, border-color 0.15s;
     }
     .queryhub-card:hover {
-      border-color: rgba(16, 185, 129, 0.5);
+      background: rgba(20, 26, 42, 0.75);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    .queryhub-card.expanded {
+      background: rgba(17, 24, 39, 0.95);
+      border-color: rgba(16, 185, 129, 0.35);
     }
     .queryhub-card-header {
-      padding: 16px 20px;
+      padding: 9px 14px;
       cursor: pointer;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 12px;
       user-select: none;
-      background: rgba(255, 255, 255, 0.02);
-      transition: background 0.2s;
+      transition: background-color 0.15s;
     }
     .queryhub-card-header:hover {
-      background: rgba(16, 185, 129, 0.05);
+      background: rgba(255, 255, 255, 0.02);
     }
-    .queryhub-card-title-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .queryhub-card-title {
-      font-size: 1.05rem;
-      font-weight: 700;
-      color: var(--text-primary, #f1f5f9);
+    .queryhub-header-left {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin: 0;
+      flex: 1;
+      min-width: 0;
     }
-    .queryhub-card-badges {
+    .queryhub-card-id {
+      color: #10b981;
+      font-weight: 700;
+      font-size: 0.82rem;
+      font-family: 'JetBrains Mono', monospace;
+      min-width: 18px;
+    }
+    .queryhub-card-title {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      margin: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: -0.01em;
+    }
+    .queryhub-header-right {
       display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
       align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
     }
     .queryhub-badge {
-      font-size: 0.72rem;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
+      font-size: 0.68rem;
+      font-weight: 500;
+      padding: 1.5px 6px;
+      border-radius: 3px;
+      line-height: 1.3;
+      white-space: nowrap;
     }
     .queryhub-badge.platform-win {
-      background: rgba(59, 130, 246, 0.15);
-      color: #60a5fa;
-      border: 1px solid rgba(59, 130, 246, 0.3);
+      background: rgba(59, 130, 246, 0.1);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.2);
     }
     .queryhub-badge.platform-mac {
-      background: rgba(245, 158, 11, 0.15);
-      color: #fbbf24;
-      border: 1px solid rgba(245, 158, 11, 0.3);
+      background: rgba(245, 158, 11, 0.1);
+      color: #fcd34d;
+      border: 1px solid rgba(245, 158, 11, 0.2);
     }
     .queryhub-badge.platform-multi {
-      background: rgba(168, 85, 247, 0.15);
-      color: #c084fc;
-      border: 1px solid rgba(168, 85, 247, 0.3);
+      background: rgba(168, 85, 247, 0.1);
+      color: #d8b4fe;
+      border: 1px solid rgba(168, 85, 247, 0.2);
     }
     .queryhub-badge.category {
-      background: rgba(16, 185, 129, 0.12);
-      color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.25);
+      background: rgba(255, 255, 255, 0.04);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .queryhub-badge.event {
+      background: rgba(244, 63, 94, 0.08);
+      color: #fda4af;
+      border: 1px solid rgba(244, 63, 94, 0.18);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.68rem;
     }
     .queryhub-chevron {
-      font-size: 1.1rem;
-      color: var(--text-secondary, #94a3b8);
-      transition: transform 0.3s ease;
-      margin-left: 16px;
+      font-size: 0.72rem;
+      color: #64748b;
+      transition: transform 0.2s;
+      margin-left: 4px;
       display: inline-block;
     }
     .queryhub-card.expanded .queryhub-chevron {
@@ -1699,77 +1736,108 @@
     }
     .queryhub-card-body {
       display: none;
-      padding: 0 20px 20px 20px;
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-      animation: fadeIn 0.25s ease-in-out;
+      padding: 10px 14px 14px 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      animation: fadeIn 0.2s ease-in-out;
     }
     .queryhub-card.expanded .queryhub-card-body {
       display: block;
     }
-    .queryhub-meta-box {
-      margin-top: 14px;
-      margin-bottom: 14px;
-      padding: 12px 16px;
-      background: rgba(0, 0, 0, 0.2);
-      border-radius: 6px;
-      border-left: 3px solid #10b981;
-      font-size: 0.88rem;
-      color: var(--text-secondary, #cbd5e1);
-      line-height: 1.5;
+    .queryhub-meta-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 10px;
+      font-size: 0.81rem;
+      line-height: 1.45;
     }
-    .queryhub-meta-item {
-      margin-bottom: 6px;
+    .queryhub-meta-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
     }
-    .queryhub-meta-item:last-child {
-      margin-bottom: 0;
+    .queryhub-meta-key {
+      font-size: 0.73rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      min-width: 130px;
+      flex-shrink: 0;
     }
-    .queryhub-meta-label {
-      font-weight: 700;
-      color: #e2e8f0;
-      margin-right: 6px;
+    .queryhub-meta-val {
+      color: #cbd5e1;
+      flex: 1;
     }
-    .queryhub-code-wrap {
-      position: relative;
-      margin-top: 10px;
-      border-radius: 6px;
+    .queryhub-meta-code {
+      color: #38bdf8;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.76rem;
+      background: rgba(56, 189, 248, 0.08);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+    .queryhub-tag-micro {
+      display: inline-block;
+      font-size: 0.68rem;
+      padding: 1px 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.03);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      margin-right: 4px;
+    }
+    .queryhub-code-container {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 5px;
       overflow: hidden;
-      border: 1px solid var(--border-color, #272d3d);
+      background: #080a0f;
     }
-    .queryhub-code-wrap pre {
-      margin: 0;
-      padding: 16px;
-      background: var(--bg-code, #0b0d13);
-      color: #e2e8f0;
-      font-family: 'JetBrains Mono', 'Fira Code', monospace;
-      font-size: 0.86rem;
-      line-height: 1.55;
-      overflow-x: auto;
+    .queryhub-code-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .queryhub-code-lang {
+      font-size: 0.68rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
     .queryhub-copy-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      padding: 6px 12px;
-      background: rgba(30, 41, 59, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 4px;
-      color: #f1f5f9;
-      font-size: 0.78rem;
-      font-weight: 600;
+      padding: 3px 8px;
+      font-size: 0.72rem;
+      font-weight: 500;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
       cursor: pointer;
-      backdrop-filter: blur(4px);
-      transition: all 0.2s;
+      transition: all 0.15s;
     }
     .queryhub-copy-btn:hover {
       background: #10b981;
       border-color: #10b981;
       color: #ffffff;
     }
+    .queryhub-code-container pre {
+      margin: 0;
+      padding: 10px 12px;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 0.81rem;
+      line-height: 1.45;
+      color: #e2e8f0;
+      overflow-x: auto;
+    }
     .queryhub-empty-state {
-      padding: 40px 20px;
+      padding: 36px 16px;
       text-align: center;
-      color: var(--text-secondary, #94a3b8);
-      font-size: 1rem;
+      color: #94a3b8;
+      font-size: 0.95rem;
     }
 
   </style>
@@ -1818,14 +1886,14 @@
       <button class="tab-btn" data-tab="visuals" title="Visualizations, Tables, Graphs & Analytics">
         📊 Visualizations <span class="tab-badge">Graphs</span>
       </button>
-      <button class="tab-btn" data-tab="recipes" title="Cross-Field Threat Hunting Recipes">
+            <button class="tab-btn" data-tab="recipes" title="Cross-Field Threat Hunting Recipes">
         ⚡ Threat Recipes <span class="tab-badge">End-to-End</span>
       </button>
-    </div>
-        <button class="tab-btn" data-tab="queryhub" title="CrowdStrike Advanced Query Hub: Dynamic, Searchable & Expandable Command Playbooks">
-        🚀 Query Hub <span class="tab-badge" id="queryHubCountBadge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">5 Commands</span>
+      <button class="tab-btn" data-tab="queryhub" title="CrowdStrike Advanced Query Hub: Dynamic, Searchable & Expandable Command Playbooks">
+        🚀 Query Hub <span class="tab-badge" id="queryHubCountBadge">5</span>
       </button>
-    </nav>
+    </div>
+  </nav>
 
   <!-- Main Content -->
   <main>
@@ -5079,10 +5147,10 @@ AND ParentBaseFileName!="explorer.exe"
       <!-- TAB: QUERY HUB -->
     <div id="queryhub" class="tab-pane">
       <div class="content-section">
-        <div class="section-header">
+        <div class="section-header" style="margin-bottom: 12px; padding-bottom: 8px;">
           <div>
-            <h2>🚀 Advanced Query Hub &amp; Dynamic Command Playbooks</h2>
-            <p>Production-grade CrowdStrike Falcon LogScale queries with correlation filters, string manipulation, selfJoinFilter, and multi-event telemetry chaining. Expand, collapse, search, and copy playbooks on demand.</p>
+            <h2 style="font-size: 16px;">🚀 Query Hub <span style="font-size: 0.8rem; font-weight: normal; color: #94a3b8; margin-left: 8px;">Dynamic Command Playbooks</span></h2>
+            <p style="font-size: 0.82rem; margin: 2px 0 0 0; color: #94a3b8;">High-fidelity LogScale queries with selfJoinFilter, process correlation, regex extraction &amp; multi-event chaining.</p>
           </div>
         </div>
 
@@ -6484,42 +6552,47 @@ event_platform=Win
       }
 
       container.innerHTML = filtered.map(cmd => {
-        const eventBadges = cmd.events.map(ev => `<span class="queryhub-badge" style="background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25);">#${escapeHtml(ev)}</span>`).join(' ');
-        const tagBadges = cmd.tags.map(t => `<span class="queryhub-badge" style="background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2);">${escapeHtml(t)}</span>`).join(' ');
+        const eventBadges = cmd.events.map(ev => `<span class="queryhub-badge event">#${escapeHtml(ev)}</span>`).join('');
+        const tagBadges = cmd.tags.map(t => `<span class="queryhub-tag-micro">${escapeHtml(t)}</span>`).join('');
 
         return `
           <div class="queryhub-card" id="queryhub-card-${cmd.id}">
             <div class="queryhub-card-header" onclick="toggleQueryHubCard(${cmd.id})">
-              <div class="queryhub-card-title-group">
-                <h3 class="queryhub-card-title">
-                  <span style="color: #10b981; font-weight: 800;">${cmd.id}.</span> ${escapeHtml(cmd.title)}
-                </h3>
-                <div class="queryhub-card-badges">
-                  <span class="queryhub-badge ${cmd.platformClass}">${escapeHtml(cmd.platform)}</span>
-                  <span class="queryhub-badge category">${escapeHtml(cmd.category)}</span>
-                  ${eventBadges}
-                  ${tagBadges}
-                </div>
+              <div class="queryhub-header-left">
+                <span class="queryhub-card-id">${cmd.id}.</span>
+                <h3 class="queryhub-card-title">${escapeHtml(cmd.title)}</h3>
               </div>
-              <span class="queryhub-chevron">▼</span>
+              <div class="queryhub-header-right">
+                <span class="queryhub-badge ${cmd.platformClass}">${escapeHtml(cmd.platform)}</span>
+                <span class="queryhub-badge category">${escapeHtml(cmd.category)}</span>
+                ${eventBadges}
+                <span class="queryhub-chevron">▾</span>
+              </div>
             </div>
             <div class="queryhub-card-body">
-              <div class="queryhub-meta-box">
-                <div class="queryhub-meta-item">
-                  <span class="queryhub-meta-label">🎯 Objective &amp; Analytical Intent:</span>
-                  <span>${escapeHtml(cmd.intent)}</span>
+              <div class="queryhub-meta-list">
+                <div class="queryhub-meta-row">
+                  <span class="queryhub-meta-key">Analytical Intent</span>
+                  <span class="queryhub-meta-val">${escapeHtml(cmd.intent)}</span>
                 </div>
-                <div class="queryhub-meta-item">
-                  <span class="queryhub-meta-label">⚙️ Key Pipeline Operators:</span>
-                  <code style="color: #38bdf8; font-size: 0.85rem;">${escapeHtml(cmd.operators)}</code>
+                <div class="queryhub-meta-row">
+                  <span class="queryhub-meta-key">Key Operators</span>
+                  <span class="queryhub-meta-val"><code class="queryhub-meta-code">${escapeHtml(cmd.operators)}</code></span>
                 </div>
-                <div class="queryhub-meta-item">
-                  <span class="queryhub-meta-label">💡 Parameters &amp; Scope:</span>
-                  <span>${escapeHtml(cmd.parameters)}</span>
+                <div class="queryhub-meta-row">
+                  <span class="queryhub-meta-key">Scope / Parameters</span>
+                  <span class="queryhub-meta-val">${escapeHtml(cmd.parameters)}</span>
+                </div>
+                <div class="queryhub-meta-row">
+                  <span class="queryhub-meta-key">Keywords &amp; Tags</span>
+                  <span class="queryhub-meta-val">${tagBadges}</span>
                 </div>
               </div>
-              <div class="queryhub-code-wrap">
-                <button class="queryhub-copy-btn" onclick="copyQueryHubCode(this, ${cmd.id})">📋 Copy Query</button>
+              <div class="queryhub-code-container">
+                <div class="queryhub-code-header">
+                  <span class="queryhub-code-lang">LogScale CQL</span>
+                  <button class="queryhub-copy-btn" onclick="copyQueryHubCode(this, ${cmd.id})">📋 Copy</button>
+                </div>
                 <pre><code id="queryhub-code-${cmd.id}" class="language-cql">${escapeHtml(cmd.query)}</code></pre>
               </div>
             </div>
