@@ -1479,11 +1479,26 @@ The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation c
 - **Active Directory Audit Event Breakdown (Playbook 21)**:
   Track account lifecycle anomalies, lockout frequency, and password resets over time using a Time-Chart Area graph:
   ```cql
-  | timeChart(span=1h, function=count(), by=ActiveDirectoryAuditAction)
+  | timeChart(span=1h, function=count(), by=ActiveDirectoryAuditActionType)
   ```
 
 - **Real Time Response (RTR) Session Activity Timeline (Playbook 22)**:
   Plot responder RTR session starts across endpoints over time to audit incident response access:
   ```cql
   | timeChart(span=1d, function=count(), by=UserName)
+  ```
+
+- **Operating System Platform Distribution (Playbook 23)**:
+  Render a Donut or Pie Chart displaying endpoint platform share across Windows, Mac, and Linux:
+  ```cql
+  #event_simpleName = SensorHeartbeat
+  | groupBy(aid, event_platform)
+  | groupBy([event_platform])
+  ```
+
+- **Real Time Response (RTR) High-Risk Command Exposure (Playbook 24)**:
+  Display high-risk command execution frequency per user and system count in a Bar Chart or multi-line table:
+  ```cql
+  | table([UserName, SystemsAccessed, Commands])
+  | sort(SystemsAccessed, order=desc)
   ```

@@ -4485,21 +4485,17 @@ setTimeInterval(start=1h, end=0h)
 
 ```cql
 name=ActiveDirectoryAudit*
-| case {
-    ActiveDirectoryAuditActionType == 0   | ActiveDirectoryAuditAction := "CREATED" ;
-    ActiveDirectoryAuditActionType == 1   | ActiveDirectoryAuditAction := "DELETED" ;
-    ActiveDirectoryAuditActionType == 2   | ActiveDirectoryAuditAction := "MODIFIED" ;
-    ActiveDirectoryAuditActionType == 4   | ActiveDirectoryAuditAction := "GROUP_MEMBER_ADDED" ;
-    ActiveDirectoryAuditActionType == 8   | ActiveDirectoryAuditAction := "GROUP_MEMBER_REMOVED" ;
-    ActiveDirectoryAuditActionType == 16  | ActiveDirectoryAuditAction := "PASSWORD_CHANGE" ;
-    ActiveDirectoryAuditActionType == 32  | ActiveDirectoryAuditAction := "PASSWORD_RESET" ;
-    ActiveDirectoryAuditActionType == 64  | ActiveDirectoryAuditAction := "ENABLED" ;
-    ActiveDirectoryAuditActionType == 128 | ActiveDirectoryAuditAction := "DISABLED" ;
-    ActiveDirectoryAuditActionType == 256 | ActiveDirectoryAuditAction := "LOCKED" ;
-    ActiveDirectoryAuditActionType == 512 | ActiveDirectoryAuditAction := "UNLOCKED" ;
-    * | ActiveDirectoryAuditAction := "UNKNOWN"
-  }
-| groupBy([@timestamp, ActiveDirectoryAuditAction, ComputerName, TargetDomainControllerHostName, DetectName, Severity, AddedPrivileges, GroupMemberAccountName, PerformedOnAccountName, PerformedByAccountObjectName])
+| setField(target="ActiveDirectoryAuditActionType", value=if(ActiveDirectoryAuditActionType == 4,
+then="GROUP_MEMBER_ADDED", else=(if(ActiveDirectoryAuditActionType == 0,
+then="CREATED", else=(if(ActiveDirectoryAuditActionType == 1,
+then="DELETED", else=(if(ActiveDirectoryAuditActionType == 2,
+then="MODIFIED", else=(if(ActiveDirectoryAuditActionType == 8,
+then="GROUP_MEMBER_REMOVED", else=(if(ActiveDirectoryAuditActionType == 16,
+then="PASSWORD_CHANGE", else=(if(ActiveDirectoryAuditActionType == 32,
+then="PASSWORD_RESET", else=(if(ActiveDirectoryAuditActionType == 64,
+then="ENABLED", else=(if(ActiveDirectoryAuditActionType == 128, then="DISABLED", else=(if(ActiveDirectoryAuditActionType == 256, then="LOCKED",
+else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")))))))))))))))))))))))
+| groupBy([@timestamp, ActiveDirectoryAuditActionType, ComputerName, TargetDomainControllerHostName, DetectName, Severity, AddedPrivileges, GroupMemberAccountName, PerformedOnAccountName, PerformedByAccountObjectName])
 | sort(@timestamp, limit=20000)
 ```
 
@@ -4526,6 +4522,47 @@ name=ActiveDirectoryAudit*
 
 // Convert timestamp to human-readable value
 | formatTime(format="%F %T %Z", as=StartTimestamp, field=StartTimestamp)
+```
+
+---
+
+### Command 23: Sensor Heartbeat Endpoint OS Platform Distribution (Pie Chart Ready)
+* **Category**: Process & Lineage (Multi-OS)
+* **Objective**: Provides an immediate executive overview of environment platform coverage, identifying OS version presence, unexpected platforms, or agent coverage imbalances.
+* **Key Operators**: `#event_simpleName=SensorHeartbeat, groupBy(aid, event_platform), groupBy([event_platform])`
+* **Parameters & Scope**: First groups by aid and event_platform to deduplicate repeated sensor heartbeats, then aggregates overall platform counts for clean visualization.
+
+```cql
+#event_simpleName = SensorHeartbeat
+| groupBy(aid, event_platform)
+| groupBy([event_platform])
+```
+
+---
+
+### Command 24: Real Time Response (RTR) High-Risk Command Execution & Asset Attribution
+* **Category**: Process & Lineage (Multi-OS)
+* **Objective**: Audits critical incident responder actions and potential rogue operator activity, capturing memory dumping and file deployment commands into a multi-line dossier.
+* **Key Operators**: `#repo='detections', ExternalApiType=/Remote/, array:regex(), concatArray(), join({#repo='sensor_metadata'}, mode=left), coalesce(), groupBy(), collect()`
+* **Parameters & Scope**: Filters for high-risk commands. Joins sensor_metadata aidmaster to enrich ComputerName from AgentIdString with fallback coalesce.
+
+```cql
+// Get UI Audit Events
+#repo="detections" ExternalApiType=/Remote/
+// Check commands for "get", "put", "memdump", "xmemdump", "run", "put-and-run"
+| array:regex("Commands[]", regex="get|put|memdump|xmemdump|run|put-and-run")
+// Create unified "Commands" field separated by an explicit newline token
+| concatArray("Commands", separator="\n", as=Commands)
+// Check to make sure Commands is populated
+| Commands=*
+// Join the asset metadata subquery using the correct repository framework syntax
+| join({ #repo="sensor_metadata" #data_source_name=aidmaster | groupBy([aid], function=selectLast([ComputerName])) }, field=AgentIdString, key=aid, include=[ComputerName], mode=left)
+// Fallback protection if an entry is absent from metadata caches
+| ComputerName := coalesce(ComputerName, AgentIdString)
+// Aggregate results incorporating the new ComputerName asset field
+| groupBy([UserName, ComputerName], function=([collect([Commands])]))
+// Final aggregation formatting your command lines into stacked multi-line fields
+| groupBy([UserName], function=([count(ComputerName, as=SystemsAccessed), collect([ComputerName, Commands])]))
 ```
 
 ---
