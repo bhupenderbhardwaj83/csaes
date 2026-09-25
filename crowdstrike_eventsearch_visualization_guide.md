@@ -1502,3 +1502,10 @@ The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation c
   | table([UserName, SystemsAccessed, Commands])
   | sort(SystemsAccessed, order=desc)
   ```
+
+- **RTR Admin Session Forensics: Destination Host & Command Log (Playbooks 25 & 26)**:
+  Structured tabular audit timeline mapping operator sessions to destination systems and command payloads:
+  ```cql
+  | table([@timestamp, UserName, DestinationHost, Commands])
+  | sort(@timestamp, order=desc)
+  ```

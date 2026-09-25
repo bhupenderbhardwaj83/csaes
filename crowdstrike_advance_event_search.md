@@ -4566,3 +4566,71 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
 ```
 
 ---
+
+### Command 25: RTR Admin Session Forensics: Destination Host & Command Log (Detections Repo)
+* **Category**: Process & Lineage (Multi-OS)
+* **Objective**: Forensic audit trail of administrative console sessions. Maps individual responder commands to the destination system using offline master asset lookup tables with fallback coalesce.
+* **Key Operators**: `#repo='detections', ExternalApiType=/Remote/, array:regex(), concatArray(), aid=~match(file='aid_master_main.csv'), coalesce(), table()`
+* **Parameters & Scope**: Scoped to #repo='detections'. Matches commands with array:regex(). Enriches DestinationHost via aid_master_main.csv with raw aid fallback.
+
+```cql
+// Get UI Audit Events across all active RTR sessions
+#repo="detections" ExternalApiType=/Remote/
+
+// Check commands for any interactive character activity
+| array:regex("Commands[]", regex=.)
+
+// Create unified "Commands" field separated by an explicit newline token for clean visibility
+| concatArray("Commands", separator="\n", as=Commands)
+
+// Validate that the commands extraction was successful
+| Commands=*
+
+// Re-map the Agent ID descriptor to standard 'aid' before pulling the file lookup dictionary
+| rename(field="AgentIdString", as="aid")
+
+// Bring in host metadata (ComputerName, ProductType, etc.) using your local reference file mapping
+| aid=~match(file="aid_master_main.csv", column=[aid], include=[ComputerName], strict=false)
+
+// Fallback safeguard to display the raw hex value if the asset has been recently offboarded
+| DestinationHost := coalesce(ComputerName, aid)
+
+// Final forensic table tracking timestamp, admin user, destination machine, and command log
+| table([@timestamp, UserName, DestinationHost, Commands])
+```
+
+---
+
+### Command 26: Enterprise-Wide RTR Session Command Audit Across All Repositories (#repo=*)
+* **Category**: Process & Lineage (Multi-OS)
+* **Objective**: Global compliance and insider threat monitoring across all Falcon data repositories. Guarantees 100% visibility of RTR actions even if events are routed outside the standard detections index.
+* **Key Operators**: `#repo=*, ExternalApiType=/Remote/, array:regex(), concatArray(), aid=~match(file='aid_master_main.csv'), DestinationHost := coalesce(), table()`
+* **Parameters & Scope**: Queries all available repositories (#repo=*). Maps AgentIdString to ComputerName via aid_master_main.csv with offline fallback.
+
+```cql
+// Get UI Audit Events across all active RTR sessions (All Repositories)
+#repo=* ExternalApiType=/Remote/
+
+// Check commands for any interactive character activity
+| array:regex("Commands[]", regex=.)
+
+// Create unified "Commands" field separated by an explicit newline token for clean visibility
+| concatArray("Commands", separator="\n", as=Commands)
+
+// Validate that the commands extraction was successful
+| Commands=*
+
+// Re-map the Agent ID descriptor to standard 'aid' before pulling the file lookup dictionary
+| rename(field="AgentIdString", as="aid")
+
+// Bring in host metadata (ComputerName, ProductType, etc.) using your local reference file mapping
+| aid=~match(file="aid_master_main.csv", column=[aid], include=[ComputerName], strict=false)
+
+// Fallback safeguard to display the raw hex value if the asset has been recently offboarded
+| DestinationHost := coalesce(ComputerName, aid)
+
+// Final forensic table tracking timestamp, admin user, destination machine, and command log
+| table([@timestamp, UserName, DestinationHost, Commands])
+```
+
+---
