@@ -5083,3 +5083,79 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
 ```
 
 ---
+
+### Command 35: Enterprise-Wide Detection Campaign Cluster & Patient Zero Discovery
+* **Category**: Exploitation & Network / Threat Intelligence (Multi-OS)
+* **Objective**: Enterprise-wide outbreak correlation clustering Falcon detections by signature, IOA rule, and hash. Surfaces the first compromised machine ("Patient Zero"), attack lifespan in minutes, and all affected hosts.
+* **Key Operators**: `#event_simpleName = /DetectionSummaryEvent/, coalesce(), groupBy(), count(), count(distinct=true), min/max timestamps, formatTime(timezone="Asia/Kolkata"), sort(), table()`
+* **Parameters & Scope**: Groups by DetectionSignature, FileIndicator, and Hash. Timestamps formatted in IST (GMT+5:30) in columns 1 and 2.
+
+```cql
+// 1. Ingest Detections Across the Entire Fleet
+#event_simpleName = /DetectionSummaryEvent/
+
+// 2. Normalize Grouping Keys (Group by Detection Signature or Hash)
+| DetectionSignature := coalesce([DetectName, IOARuleName, "Generic ML Detection"])
+| FileIndicator := coalesce([FileName, "Unknown"])
+| HashIndicator := coalesce([SHA256HashData, MD5HashData, "-"])
+
+// 3. Aggregate Campaign Scope, Timelines & Identify First vs Last Impact
+| groupBy([DetectionSignature, FileIndicator, HashIndicator, Tactic, Technique], function=[
+    count(as=TotalDetectionSurges),
+    count(aid, distinct=true, as=ImpactedEndpointsCount),
+    count(UserName, distinct=true, as=ImpactedUsersCount),
+    min(@timestamp, as=PatientZeroEpoch),
+    max(@timestamp, as=LatestDetectionEpoch),
+    collect([ComputerName, UserName], limit=50)
+  ])
+
+// 4. Format Timestamps to IST (GMT+5:30) and Calculate Attack Lifespan
+| LatestDetectionTime_IST := formatTime("%Y-%m-%d %H:%M:%S", field=LatestDetectionEpoch, timezone="Asia/Kolkata")
+| PatientZeroTime_IST := formatTime("%Y-%m-%d %H:%M:%S", field=PatientZeroEpoch, timezone="Asia/Kolkata")
+| CampaignDurationMinutes := (LatestDetectionEpoch - PatientZeroEpoch) / 60000
+| drop([PatientZeroEpoch, LatestDetectionEpoch])
+
+// 5. Surface Multi-Host Outbreaks First (Timestamps in 1st & 2nd Columns)
+| sort(ImpactedEndpointsCount, order=desc)
+| table([LatestDetectionTime_IST, PatientZeroTime_IST, DetectionSignature, FileIndicator, Tactic, Technique, ImpactedEndpointsCount, ImpactedUsersCount, TotalDetectionSurges, CampaignDurationMinutes, ComputerName, UserName, HashIndicator])
+```
+
+---
+
+### Command 36: Unprevented High-Severity Detection Hunter (Detect-Only & Policy Audit Mode)
+* **Category**: Exploitation & Network / Threat Intelligence (Multi-OS)
+* **Objective**: Isolates active Critical and High severity Falcon detections where the adversary was NOT prevented or killed by sensor policy, joining execution command line, parent process, and corporate user identity.
+* **Key Operators**: `#event_simpleName = /DetectionSummaryEvent/, in(SeverityName), !in(PatternDispositionDescription), join({ProcessRollup2}), join({UserIdentity}), coalesce(), formatTime(timezone="Asia/Kolkata"), table()`
+* **Parameters & Scope**: Filters for Critical/High detections not blocked. Converts timestamp to IST in column 1. Provides direct FalconHostLink.
+
+```cql
+// 1. Ingest Detections and Filter to High & Critical Severity
+#event_simpleName = /DetectionSummaryEvent/
+| in(field=SeverityName, values=["Critical", "High"], ignoreCase=true)
+
+// 2. Isolate Non-Prevented Dispositions (Execution Allowed / Audit Mode)
+| !in(field=PatternDispositionDescription, values=["blocked", "killed", "quarantined", "prevented"], ignoreCase=true)
+
+// 3. Correlate with Process Execution Telemetry to pull complete Command Line & Parent
+| ProcId := coalesce([ContextProcessId, TargetProcessId])
+| join({
+    #event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/
+  }, field=[aid, ProcId], key=[aid, TargetProcessId], 
+     include=[ParentBaseFileName, FileName, CommandLine, AuthenticationId], mode=left)
+
+// 4. Resolve Human User Identity
+| join({
+    #event_simpleName = UserIdentity
+  }, field=[aid, AuthenticationId], key=[aid, AuthenticationId], 
+     include=[UserName, user.name], mode=left)
+
+| UserAccount := coalesce([UserName, user.name, UserSid, "-"])
+| ExecutionCLI := coalesce([CommandLine, "-"])
+
+// 5. Structure High-Priority Escalation Table (Timestamp in 1st Column)
+| DetectionTime_IST := formatTime("%Y-%m-%d %H:%M:%S", field=@timestamp, timezone="Asia/Kolkata")
+| table([DetectionTime_IST, ComputerName, aid, UserAccount, DetectName, SeverityName, PatternDispositionDescription, Tactic, Technique, FileName, ParentBaseFileName, ExecutionCLI, FalconHostLink])
+| sort(@timestamp, order=desc)
+```
+
+---

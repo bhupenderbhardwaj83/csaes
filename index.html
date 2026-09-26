@@ -1921,7 +1921,7 @@
         ⚡ Threat Recipes <span class="tab-badge">End-to-End</span>
       </button>
       <button class="tab-btn" data-tab="queryhub" title="CrowdStrike Advanced Query Hub: Dynamic, Searchable & Expandable Command Playbooks">
-        🚀 Query Hub <span class="tab-badge" id="queryHubCountBadge">34</span>
+        🚀 Query Hub <span class="tab-badge" id="queryHubCountBadge">36</span>
       </button>
     </div>
   </nav>
@@ -5466,12 +5466,12 @@ AND ParentBaseFileName!="explorer.exe"
               <button class="queryhub-btn" id="queryHubCollapseAllBtn">🔼 Collapse All</button>
             </div>
             <div class="stats-counter" style="margin-left: auto;">
-              Showing <strong id="queryHubVisibleCount" style="color: #34d399;">34</strong> of 34 Commands
+              Showing <strong id="queryHubVisibleCount" style="color: #34d399;">36</strong> of 36 Commands
             </div>
           </div>
 
           <div class="queryhub-pills" id="queryHubPills">
-            <div class="queryhub-pill active" data-category="ALL">All Commands (<span id="pillCountAll">34</span>)</div>
+            <div class="queryhub-pill active" data-category="ALL">All Commands (<span id="pillCountAll">36</span>)</div>
             <div class="queryhub-pill" data-category="Process & Lineage">Process &amp; Lineage</div>
             <div class="queryhub-pill" data-category="Authentication">Authentication</div>
             <div class="queryhub-pill" data-category="Exploitation & Network">Exploitation &amp; Network</div>
@@ -7524,6 +7524,57 @@ AND ParentBaseFileName!="explorer.exe"
       "operators": "#event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/, case { ... }, join({UserIdentity}), join({NetworkConnectIP4}), regex(?<TargetFromCLI>), coalesce(), groupBy(), formatTime(), table()",
       "parameters": "Multi-vector detection matching binaries, full image paths, and specific CLI command switches across Windows, Linux, and macOS. Resolves UserIdentity and extracts targeted remote IPs/subnets.",
       "query": "// 1. Ingest real-time process creations and pre-existing running sessions\n#event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/\n\n// 2. Multi-Vector Filter: Detect Top 25 offensive binaries, tools, scripts, and CLI flags\n| (\n    FileName = /(?:^|[\\/])(?:nxc|netexec|crackmapexec|cme|sharphound|bloodhound|azurehound|msfconsole|msfvenom|meterpreter|mimikatz|kekeo|rubeus|certipy|secretsdump|wmiexec|smbexec|atexec|ntlmrelayx|chisel|ligolo|beacon|sliver|havoc|badger|seatbelt|winpeas|linpeas|fscan|adfind|lazagne|nanodump|sqlmap|responder|inveigh|hydra|medusa|hashcat|sharpview|powerview)(?:\.exe|\.py|\.bin|\.elf|\.ps1)?$/i\n    OR ImageFileName = /(?:nxc|netexec|crackmapexec|sharphound|bloodhound|msfvenom|meterpreter|mimikatz|rubeus|certipy|secretsdump|wmiexec|chisel|ligolo|winpeas|linpeas|fscan|adfind|nanodump|sqlmap|responder)/i\n    OR CommandLine = /(?:nxc\s+(?:smb|winrm|ssh|ldap|rdp|mssql|ftp)|crackmapexec|sharphound|bloodhound|sekurlsa::|lsadump::|privilege::debug|rubeus\s+(?:kerberoast|asreproast|triage|dump|ptt)|certipy\s+(?:find|req|auth)|secretsdump\.py|wmiexec\.py|smbexec\.py|ntlmrelayx\.py|chisel\s+(?:client|server)|ligolo|meterpreter|msfvenom\s+-p|winpeas|linpeas|fscan\s+-h|adfind\s+-f|responder\s+-I|inveigh|nanodump)/i\n  )\n\n// 3. Classify and tag the detected tool for rapid analyst triage\n| case {\n    CommandLine = /nxc|netexec|crackmapexec/i OR FileName = /nxc|netexec|crackmapexec/i       | DetectedTool := \"NetExec / CrackMapExec (Lateral Spray)\" ;\n    CommandLine = /bloodhound|sharphound|azurehound/i OR FileName = /bloodhound|sharphound/i   | DetectedTool := \"BloodHound / SharpHound (AD Recon)\" ;\n    CommandLine = /msfconsole|msfvenom|meterpreter/i OR FileName = /msfconsole|msfvenom/i     | DetectedTool := \"Metasploit / Meterpreter (Exploitation/Payload)\" ;\n    CommandLine = /mimikatz|sekurlsa|kekeo/i OR FileName = /mimikatz|kekeo/i                   | DetectedTool := \"Mimikatz / Kekeo (Credential Dumping)\" ;\n    CommandLine = /rubeus/i OR FileName = /rubeus/i                                             | DetectedTool := \"Rubeus (Kerberos Abuse)\" ;\n    CommandLine = /certipy/i OR FileName = /certipy/i                                           | DetectedTool := \"Certipy (AD CS PKI Abuse)\" ;\n    CommandLine = /secretsdump|wmiexec|smbexec|atexec|ntlmrelayx/i OR FileName = /secretsdump/i | DetectedTool := \"Impacket Suite (Lateral Movement)\" ;\n    CommandLine = /chisel|ligolo/i OR FileName = /chisel|ligolo/i                               | DetectedTool := \"Chisel / Ligolo (C2 Tunnelling & Pivoting)\" ;\n    CommandLine = /beacon|sliver|havoc|badger/i OR FileName = /beacon|sliver/i                 | DetectedTool := \"C2 Agent (Cobalt Strike / Sliver / Havoc)\" ;\n    CommandLine = /winpeas|linpeas|seatbelt/i OR FileName = /winpeas|linpeas/i                 | DetectedTool := \"PEAS / Seatbelt (Privilege Escalation Audit)\" ;\n    CommandLine = /fscan|adfind/i OR FileName = /fscan|adfind/i                                 | DetectedTool := \"fscan / AdFind (Internal Network / AD Recon)\" ;\n    CommandLine = /sqlmap/i OR FileName = /sqlmap/i                                             | DetectedTool := \"SQLMap (Database Exploitation)\" ;\n    CommandLine = /responder|inveigh/i OR FileName = /responder|inveigh/i                       | DetectedTool := \"Responder / Inveigh (LLMNR/NBT-NS Poisoning)\" ;\n    CommandLine = /nanodump|procdump/i OR FileName = /nanodump|procdump/i                       | DetectedTool := \"NanoDump / ProcDump (LSASS Memory Dumper)\" ;\n    CommandLine = /hydra|medusa|hashcat/i OR FileName = /hydra|medusa/i                         | DetectedTool := \"Hydra / Hashcat (Credential Cracker)\" ;\n    *                                                                                           | DetectedTool := \"Offensive Post-Exploitation Tool\" ;\n  }\n\n// 4. Resolve authenticated user identity via AuthenticationId LUID\n| join({\n    #event_simpleName = UserIdentity\n  }, field=[aid, AuthenticationId], key=[aid, AuthenticationId], include=[UserName, user.name], mode=left)\n| UserAccount := coalesce([UserName, user.name, UserSid, \"-\"])\n\n// 5. Correlate with outbound socket telemetry to identify targeted remote hosts and ports\n| join({\n    #event_simpleName = NetworkConnectIP4\n  }, field=[aid, TargetProcessId], key=[aid, ContextProcessId], include=[RemoteAddressIP4, RemotePort], mode=left)\n\n// 6. Fallback: Extract target IP / CIDR from Command-Line arguments if socket was ephemeral or scanning subnets\n| regex(\"(?<TargetFromCLI>(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?:/[0-9]{1,2})?)\", field=CommandLine, strict=false)\n| TargetDestination := coalesce([RemoteAddressIP4, TargetFromCLI, \"Local-Execution\"])\n| TargetPort := coalesce([RemotePort, \"-\"])\n\n// 7. Aggregate timeline, endpoints, users, and targeted destinations\n| groupBy([ComputerName, aid, UserAccount, DetectedTool, FileName, TargetDestination, TargetPort], function=[\n    count(as=TotalExecutions),\n    min(@timestamp, as=FirstSeenEpoch),\n    max(@timestamp, as=LastSeenEpoch),\n    collect([ParentBaseFileName, CommandLine, SHA256HashData])\n  ])\n\n// 8. Convert timestamps to IST (GMT+5:30)\n| FirstSeen := formatTime(\"%Y-%m-%d %H:%M:%S\", field=FirstSeenEpoch, timezone=\"Asia/Kolkata\")\n| LastSeen := formatTime(\"%Y-%m-%d %H:%M:%S\", field=LastSeenEpoch, timezone=\"Asia/Kolkata\")\n| drop([FirstSeenEpoch, LastSeenEpoch])\n\n// 9. Surface active offensive operations first\n| sort(TotalExecutions, order=desc)\n| table([FirstSeen, LastSeen, ComputerName, aid, UserAccount, DetectedTool, FileName, TargetDestination, TargetPort, TotalExecutions, ParentBaseFileName, CommandLine, SHA256HashData])"
+}
+,
+{
+      "id": 35,
+      "title": "Enterprise-Wide Detection Campaign Cluster & Patient Zero Discovery",
+      "category": "Exploitation & Network",
+      "platform": "Multi-OS",
+      "platformClass": "platform-multi",
+      "events": [
+            "DetectionSummaryEvent"
+      ],
+      "tags": [
+            "Detections",
+            "Patient Zero",
+            "Campaign Cluster",
+            "Threat Hunting",
+            "Blast Radius",
+            "groupBy",
+            "min/max"
+      ],
+      "desc": "Enterprise-wide outbreak correlation clustering Falcon detections by signature, IOA rule, and hash. Surfaces the first compromised machine (\"Patient Zero\"), attack lifespan in minutes, and all affected hosts.",
+      "intent": "Discovers coordinated multi-endpoint threat campaigns, pinpoints patient zero, and measures enterprise blast radius across users and machines with IST timestamps displayed first.",
+      "operators": "#event_simpleName = /DetectionSummaryEvent/, coalesce(), groupBy(), count(), count(distinct=true), min/max timestamps, formatTime(timezone=\"Asia/Kolkata\"), sort(), table()",
+      "parameters": "Groups by DetectionSignature, FileIndicator, and Hash. Timestamps formatted in IST (GMT+5:30) in columns 1 and 2.",
+      "query": "// 1. Ingest Detections Across the Entire Fleet\n#event_simpleName = /DetectionSummaryEvent/\n\n// 2. Normalize Grouping Keys (Group by Detection Signature or Hash)\n| DetectionSignature := coalesce([DetectName, IOARuleName, \"Generic ML Detection\"])\n| FileIndicator := coalesce([FileName, \"Unknown\"])\n| HashIndicator := coalesce([SHA256HashData, MD5HashData, \"-\"])\n\n// 3. Aggregate Campaign Scope, Timelines & Identify First vs Last Impact\n| groupBy([DetectionSignature, FileIndicator, HashIndicator, Tactic, Technique], function=[\n    count(as=TotalDetectionSurges),\n    count(aid, distinct=true, as=ImpactedEndpointsCount),\n    count(UserName, distinct=true, as=ImpactedUsersCount),\n    min(@timestamp, as=PatientZeroEpoch),\n    max(@timestamp, as=LatestDetectionEpoch),\n    collect([ComputerName, UserName], limit=50)\n  ])\n\n// 4. Format Timestamps to IST (GMT+5:30) and Calculate Attack Lifespan\n| LatestDetectionTime_IST := formatTime(\"%Y-%m-%d %H:%M:%S\", field=LatestDetectionEpoch, timezone=\"Asia/Kolkata\")\n| PatientZeroTime_IST := formatTime(\"%Y-%m-%d %H:%M:%S\", field=PatientZeroEpoch, timezone=\"Asia/Kolkata\")\n| CampaignDurationMinutes := (LatestDetectionEpoch - PatientZeroEpoch) / 60000\n| drop([PatientZeroEpoch, LatestDetectionEpoch])\n\n// 5. Surface Multi-Host Outbreaks First (Timestamps in 1st & 2nd Columns)\n| sort(ImpactedEndpointsCount, order=desc)\n| table([LatestDetectionTime_IST, PatientZeroTime_IST, DetectionSignature, FileIndicator, Tactic, Technique, ImpactedEndpointsCount, ImpactedUsersCount, TotalDetectionSurges, CampaignDurationMinutes, ComputerName, UserName, HashIndicator])"
+},
+{
+      "id": 36,
+      "title": "Unprevented High-Severity Detection Hunter (Detect-Only & Policy Audit Mode)",
+      "category": "Exploitation & Network",
+      "platform": "Multi-OS",
+      "platformClass": "platform-multi",
+      "events": [
+            "DetectionSummaryEvent",
+            "ProcessRollup2",
+            "UserIdentity"
+      ],
+      "tags": [
+            "Detections",
+            "Unprevented",
+            "Detect-Only",
+            "Audit Mode",
+            "High Severity",
+            "Process Lineage",
+            "join"
+      ],
+      "desc": "Isolates active Critical and High severity Falcon detections where the adversary was NOT prevented or killed by sensor policy, joining execution command line, parent process, and corporate user identity.",
+      "intent": "Surfaces live, active adversary operations that were unhindered by prevention policies (policy disabled, detect-only mode, or exclusion bypass) for immediate high-priority SOC triage.",
+      "operators": "#event_simpleName = /DetectionSummaryEvent/, in(SeverityName), !in(PatternDispositionDescription), join({ProcessRollup2}), join({UserIdentity}), coalesce(), formatTime(timezone=\"Asia/Kolkata\"), table()",
+      "parameters": "Filters for Critical/High detections not blocked. Converts timestamp to IST in column 1. Provides direct FalconHostLink.",
+      "query": "// 1. Ingest Detections and Filter to High & Critical Severity\n#event_simpleName = /DetectionSummaryEvent/\n| in(field=SeverityName, values=[\"Critical\", \"High\"], ignoreCase=true)\n\n// 2. Isolate Non-Prevented Dispositions (Execution Allowed / Audit Mode)\n| !in(field=PatternDispositionDescription, values=[\"blocked\", \"killed\", \"quarantined\", \"prevented\"], ignoreCase=true)\n\n// 3. Correlate with Process Execution Telemetry to pull complete Command Line & Parent\n| ProcId := coalesce([ContextProcessId, TargetProcessId])\n| join({\n    #event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/\n  }, field=[aid, ProcId], key=[aid, TargetProcessId], \n     include=[ParentBaseFileName, FileName, CommandLine, AuthenticationId], mode=left)\n\n// 4. Resolve Human User Identity\n| join({\n    #event_simpleName = UserIdentity\n  }, field=[aid, AuthenticationId], key=[aid, AuthenticationId], \n     include=[UserName, user.name], mode=left)\n\n| UserAccount := coalesce([UserName, user.name, UserSid, \"-\"])\n| ExecutionCLI := coalesce([CommandLine, \"-\"])\n\n// 5. Structure High-Priority Escalation Table (Timestamp in 1st Column)\n| DetectionTime_IST := formatTime(\"%Y-%m-%d %H:%M:%S\", field=@timestamp, timezone=\"Asia/Kolkata\")\n| table([DetectionTime_IST, ComputerName, aid, UserAccount, DetectName, SeverityName, PatternDispositionDescription, Tactic, Technique, FileName, ParentBaseFileName, ExecutionCLI, FalconHostLink])\n| sort(@timestamp, order=desc)"
 }
 ];
 

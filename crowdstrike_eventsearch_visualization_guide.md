@@ -1550,3 +1550,16 @@ The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation c
   | sort(ExecutionVolume, order=desc, limit=25)
   ```
 
+- **Enterprise Detection Campaign Cluster & Patient Zero Timeline (Playbook 35)**:
+  Visualize coordinated threat outbreaks using a Dual-Timestamp Scatter Plot or Bubble Chart plotting `ImpactedEndpointsCount` against `CampaignDurationMinutes`, with `LatestDetectionTime_IST` and `PatientZeroTime_IST` as primary anchors:
+  ```cql
+  | sort(ImpactedEndpointsCount, order=desc)
+  | table([LatestDetectionTime_IST, PatientZeroTime_IST, DetectionSignature, ImpactedEndpointsCount, ImpactedUsersCount, TotalDetectionSurges, CampaignDurationMinutes])
+  ```
+
+- **Unprevented High-Severity Detection Escalation Matrix (Playbook 36)**:
+  Track live unhindered threats (Detect-Only / Policy Audit Mode) in an Executive Risk Grid categorized by `SeverityName`, `PatternDispositionDescription`, and `Tactic`:
+  ```cql
+  | table([DetectionTime_IST, ComputerName, UserAccount, DetectName, SeverityName, PatternDispositionDescription, Tactic, FileName, ParentBaseFileName, ExecutionCLI])
+  | sort(@timestamp, order=desc)
+  ```
