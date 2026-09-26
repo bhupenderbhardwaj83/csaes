@@ -1531,3 +1531,10 @@ The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation c
   | sort(FlowVolume, order=desc, limit=30)
   ```
 
+- **Top 25 Offensive Hacking Tools Breakdown Matrix (Playbook 34)**:
+  Track adversary tool usage and targeted systems via a Treemap or Stacked Bar Chart categorized by `DetectedTool` and `TargetDestination`:
+  ```cql
+  | groupBy([DetectedTool, TargetDestination], function=count(as=ExecutionVolume))
+  | sort(ExecutionVolume, order=desc, limit=25)
+  ```
+

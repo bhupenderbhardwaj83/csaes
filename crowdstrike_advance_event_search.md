@@ -4875,3 +4875,76 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
 ```
 
 ---
+
+### Command 34: Top 25 Hacking & Offensive Security Tool Hunter (Host, User, Tool Classification & Target IP/Port)
+* **Category**: Exploitation & Network (Multi-OS)
+* **Objective**: Enterprise threat hunt discovering execution of top 25 adversary and pentesting tools (NetExec/nxc, BloodHound, Metasploit, msfvenom, Mimikatz, Rubeus, Impacket, Chisel, Ligolo, Cobalt Strike, etc.), capturing host, user identity, CLI invocation, execution timeline, and targeted remote hosts/subnets.
+* **Key Operators**: `#event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/, case { ... }, join({UserIdentity}), join({NetworkConnectIP4}), regex(?<TargetFromCLI>), coalesce(), groupBy(), formatTime(), table()`
+* **Parameters & Scope**: Multi-vector detection matching binaries, full image paths, and specific CLI command switches across Windows, Linux, and macOS. Resolves `UserIdentity` and extracts targeted remote IPs/subnets.
+
+```cql
+// 1. Ingest real-time process creations and pre-existing running sessions
+#event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/
+
+// 2. Multi-Vector Filter: Detect Top 25 offensive binaries, tools, scripts, and CLI flags
+| (
+    FileName = /(?:^|[\\/])(?:nxc|netexec|crackmapexec|cme|sharphound|bloodhound|azurehound|msfconsole|msfvenom|meterpreter|mimikatz|kekeo|rubeus|certipy|secretsdump|wmiexec|smbexec|atexec|ntlmrelayx|chisel|ligolo|beacon|sliver|havoc|badger|seatbelt|winpeas|linpeas|fscan|adfind|lazagne|nanodump|sqlmap|responder|inveigh|hydra|medusa|hashcat|sharpview|powerview)(?:\.exe|\.py|\.bin|\.elf|\.ps1)?$/i
+    OR ImageFileName = /(?:nxc|netexec|crackmapexec|sharphound|bloodhound|msfvenom|meterpreter|mimikatz|rubeus|certipy|secretsdump|wmiexec|chisel|ligolo|winpeas|linpeas|fscan|adfind|nanodump|sqlmap|responder)/i
+    OR CommandLine = /(?:nxc\s+(?:smb|winrm|ssh|ldap|rdp|mssql|ftp)|crackmapexec|sharphound|bloodhound|sekurlsa::|lsadump::|privilege::debug|rubeus\s+(?:kerberoast|asreproast|triage|dump|ptt)|certipy\s+(?:find|req|auth)|secretsdump\.py|wmiexec\.py|smbexec\.py|ntlmrelayx\.py|chisel\s+(?:client|server)|ligolo|meterpreter|msfvenom\s+-p|winpeas|linpeas|fscan\s+-h|adfind\s+-f|responder\s+-I|inveigh|nanodump)/i
+  )
+
+// 3. Classify and tag the detected tool for rapid analyst triage
+| case {
+    CommandLine = /nxc|netexec|crackmapexec/i OR FileName = /nxc|netexec|crackmapexec/i       | DetectedTool := "NetExec / CrackMapExec (Lateral Spray)" ;
+    CommandLine = /bloodhound|sharphound|azurehound/i OR FileName = /bloodhound|sharphound/i   | DetectedTool := "BloodHound / SharpHound (AD Recon)" ;
+    CommandLine = /msfconsole|msfvenom|meterpreter/i OR FileName = /msfconsole|msfvenom/i     | DetectedTool := "Metasploit / Meterpreter (Exploitation/Payload)" ;
+    CommandLine = /mimikatz|sekurlsa|kekeo/i OR FileName = /mimikatz|kekeo/i                   | DetectedTool := "Mimikatz / Kekeo (Credential Dumping)" ;
+    CommandLine = /rubeus/i OR FileName = /rubeus/i                                             | DetectedTool := "Rubeus (Kerberos Abuse)" ;
+    CommandLine = /certipy/i OR FileName = /certipy/i                                           | DetectedTool := "Certipy (AD CS PKI Abuse)" ;
+    CommandLine = /secretsdump|wmiexec|smbexec|atexec|ntlmrelayx/i OR FileName = /secretsdump/i | DetectedTool := "Impacket Suite (Lateral Movement)" ;
+    CommandLine = /chisel|ligolo/i OR FileName = /chisel|ligolo/i                               | DetectedTool := "Chisel / Ligolo (C2 Tunnelling & Pivoting)" ;
+    CommandLine = /beacon|sliver|havoc|badger/i OR FileName = /beacon|sliver/i                 | DetectedTool := "C2 Agent (Cobalt Strike / Sliver / Havoc)" ;
+    CommandLine = /winpeas|linpeas|seatbelt/i OR FileName = /winpeas|linpeas/i                 | DetectedTool := "PEAS / Seatbelt (Privilege Escalation Audit)" ;
+    CommandLine = /fscan|adfind/i OR FileName = /fscan|adfind/i                                 | DetectedTool := "fscan / AdFind (Internal Network / AD Recon)" ;
+    CommandLine = /sqlmap/i OR FileName = /sqlmap/i                                             | DetectedTool := "SQLMap (Database Exploitation)" ;
+    CommandLine = /responder|inveigh/i OR FileName = /responder|inveigh/i                       | DetectedTool := "Responder / Inveigh (LLMNR/NBT-NS Poisoning)" ;
+    CommandLine = /nanodump|procdump/i OR FileName = /nanodump|procdump/i                       | DetectedTool := "NanoDump / ProcDump (LSASS Memory Dumper)" ;
+    CommandLine = /hydra|medusa|hashcat/i OR FileName = /hydra|medusa/i                         | DetectedTool := "Hydra / Hashcat (Credential Cracker)" ;
+    *                                                                                           | DetectedTool := "Offensive Post-Exploitation Tool" ;
+  }
+
+// 4. Resolve authenticated user identity via AuthenticationId LUID
+| join({
+    #event_simpleName = UserIdentity
+  }, field=[aid, AuthenticationId], key=[aid, AuthenticationId], include=[UserName, user.name], mode=left)
+| UserAccount := coalesce([UserName, user.name, UserSid, "-"])
+
+// 5. Correlate with outbound socket telemetry to identify targeted remote hosts and ports
+| join({
+    #event_simpleName = NetworkConnectIP4
+  }, field=[aid, TargetProcessId], key=[aid, ContextProcessId], include=[RemoteAddressIP4, RemotePort], mode=left)
+
+// 6. Fallback: Extract target IP / CIDR from Command-Line arguments if socket was ephemeral or scanning subnets
+| regex("(?<TargetFromCLI>(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?:/[0-9]{1,2})?)", field=CommandLine, strict=false)
+| TargetDestination := coalesce([RemoteAddressIP4, TargetFromCLI, "Local-Execution"])
+| TargetPort := coalesce([RemotePort, "-"])
+
+// 7. Aggregate timeline, endpoints, users, and targeted destinations
+| groupBy([ComputerName, aid, UserAccount, DetectedTool, FileName, TargetDestination, TargetPort], function=[
+    count(as=TotalExecutions),
+    min(@timestamp, as=FirstSeenEpoch),
+    max(@timestamp, as=LastSeenEpoch),
+    collect([ParentBaseFileName, CommandLine, SHA256HashData])
+  ])
+
+// 8. Convert timestamps to UTC
+| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
+| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")
+| drop([FirstSeenEpoch, LastSeenEpoch])
+
+// 9. Surface active offensive operations first
+| sort(TotalExecutions, order=desc)
+| table([FirstSeen, LastSeen, ComputerName, aid, UserAccount, DetectedTool, FileName, TargetDestination, TargetPort, TotalExecutions, ParentBaseFileName, CommandLine, SHA256HashData])
+```
+
+---
