@@ -462,7 +462,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
 ```cql
 #repo="base_sensor" #event_simpleName="ProcessRollup2"
 | FileName=/powershell\.exe$/i
-| eval(ExecutionTime = formatTime("%Y-%m-%d %H:%M:%S", field=@timestamp, as=ExecutionTime))
+| eval(ExecutionTime = formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, as=ExecutionTime))
 | rename(field=ComputerName, as="Target Host")
 | rename(field=UserName, as="Executing Account")
 | rename(field=CommandLine, as="CLI Invocation")
@@ -530,7 +530,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
     max(@timestamp, as=LastSeen)
   ])
 | FailedAttempts >= 5
-| LastFailed := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeen)
+| LastFailed := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen)
 | sort(FailedAttempts, order=desc, limit=50)
 | table([UserName, RemoteAddressIP4, FailedAttempts, TargetHosts, LastFailed])
 ```
@@ -683,7 +683,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
     max(@timestamp, as=LastSeen),
     collect(CommandLine, limit=1, as=SampleCLI)
   ])
-| LastExecution := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeen)
+| LastExecution := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen)
 | sort(InvocationCount, order=desc, limit=100)
 | table([LastExecution, ComputerName, UserName, LineageChain, is_enc, InvocationCount, SampleCLI])
 ```
@@ -1098,8 +1098,8 @@ Summarize network connection payload sizes, preserve forensic sample values, or 
     sum(SizeBytes, as=TotalBytesWritten),
     collect([ComputerName, UserName], limit=20)
   ])
-| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
-| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
+| FirstSeen := formatTime("%d-%b-%Y %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
+| LastSeen := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
 | drop([FirstSeenEpoch, LastSeenEpoch])
 | sort(TotalBytesWritten, order=desc)
 | head(15)
@@ -1178,7 +1178,7 @@ Convert raw epoch or ISO timestamps into localized SOC shift formats.
 
 ```cql
 #event_simpleName="UserLogon"
-| ShiftTime := formatTime("%Y-%m-%d %H:%M:%S UTC", field=@timestamp)
+| ShiftTime := formatTime("%d-%b-%Y %H:%M:%S UTC", field=@timestamp)
 | table([ShiftTime, ComputerName, UserName, LogonType])
 | head(50)
 ```
@@ -1561,5 +1561,26 @@ The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation c
   Track live unhindered threats (Detect-Only / Policy Audit Mode) in an Executive Risk Grid categorized by `SeverityName`, `PatternDispositionDescription`, and `Tactic`:
   ```cql
   | table([DetectionTime_IST, ComputerName, UserAccount, DetectName, SeverityName, PatternDispositionDescription, Tactic, FileName, ParentBaseFileName, ExecutionCLI])
+  | sort(@timestamp, order=desc)
+  ```
+
+- **360° Root Cause Analysis & Lineage Visual Tree (Playbook 37)**:
+  Project process ancestry hierarchies and prevention outcomes into a Multi-Column Forensic Table with DD-MMM-YYYY 24-hr IST timelines:
+  ```cql
+  | table([DetectionTime_IST, ComputerName, UserAccount, DetectName, SeverityName, DefenseOutcome, FullAncestry, ExecutionCLI, FalconHostLink])
+  | sort(@timestamp, order=desc)
+  ```
+
+- **Pre-Incident Ingress Vector & Inception Chain (Playbook 38)**:
+  Track chronological stages leading to a breach using an Inception Timeline sorted ascending:
+  ```cql
+  | table([EventTime_IST, ComputerName, ActivityPhase, Details])
+  | sort(@timestamp, order=asc)
+  ```
+
+- **Post-Detection Blast Radius & Persistence Audit (Playbook 39)**:
+  Display post-alert adversary activity, secondary LOLBins, and C2 sockets in an Escalation Table:
+  ```cql
+  | table([EventTime_IST, ComputerName, UserName, ThreatCategory, ActionSummary])
   | sort(@timestamp, order=desc)
   ```

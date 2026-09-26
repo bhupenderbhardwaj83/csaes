@@ -451,7 +451,7 @@ Filter **after** aggregation to surface anomalies, brute-force attempts, and out
 ##### Stage 6: FORMAT & PROJECT (Display Preparation)
 Prepare the final columns and clean up raw clutter:
 - **Tabular Projection**: `table([ComputerName, UserName, FailedLogons, TotalLogons])`.
-- **Time Formatting**: `_timestamp := formatTime("%Y-%m-%d %H:%M:%S", field=@timestamp)`.
+- **Time Formatting**: `_timestamp := formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp)`.
 - **Column Aliasing**: `rename(field=FailedLogons, as="Failed Attempts")`.
 
 ##### Stage 7: SORT & SLICE (Final Ordering)
@@ -620,8 +620,8 @@ When hunting for an organization, user, or domain keyword (e.g., `naukri`), anal
       max(@timestamp, as=LastSeenEpoch)
     ])
   | DwellMinutes := (LastSeenEpoch - FirstSeenEpoch) / 60000
-  | FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
-  | LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
+  | FirstSeen := formatTime("%d-%b-%Y %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
+  | LastSeen := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
   | drop([FirstSeenEpoch, LastSeenEpoch])
   ```
 
@@ -3183,7 +3183,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
 ```cql
 #repo="base_sensor" #event_simpleName="ProcessRollup2"
 | FileName=/powershell\.exe$/i
-| eval(ExecutionTime = formatTime("%Y-%m-%d %H:%M:%S", field=@timestamp, as=ExecutionTime))
+| eval(ExecutionTime = formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, as=ExecutionTime))
 | rename(field=ComputerName, as="Target Host")
 | rename(field=UserName, as="Executing Account")
 | rename(field=CommandLine, as="CLI Invocation")
@@ -3251,7 +3251,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
     max(@timestamp, as=LastSeen)
   ])
 | FailedAttempts >= 5
-| LastFailed := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeen)
+| LastFailed := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen)
 | sort(FailedAttempts, order=desc, limit=50)
 | table([UserName, RemoteAddressIP4, FailedAttempts, TargetHosts, LastFailed])
 ```
@@ -3404,7 +3404,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
     max(@timestamp, as=LastSeen),
     collect(CommandLine, limit=1, as=SampleCLI)
   ])
-| LastExecution := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeen)
+| LastExecution := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen)
 | sort(InvocationCount, order=desc, limit=100)
 | table([LastExecution, ComputerName, UserName, LineageChain, is_enc, InvocationCount, SampleCLI])
 ```
@@ -3978,7 +3978,7 @@ Convert raw epoch or ISO timestamps into localized SOC shift formats.
 
 ```cql
 #event_simpleName="UserLogon"
-| ShiftTime := formatTime("%Y-%m-%d %H:%M:%S UTC", field=@timestamp)
+| ShiftTime := formatTime("%d-%b-%Y %H:%M:%S UTC", field=@timestamp)
 | table([ShiftTime, ComputerName, UserName, LogonType])
 | head(50)
 ```
@@ -4227,8 +4227,8 @@ event_platform=Win
   }
 | PasswordLastSet := PasswordLastSet * 1000
 | LogonTime := LogonTime * 1000
-| PasswordLastSet := formatTime("%Y-%m-%d %H:%M:%S", field=PasswordLastSet, locale=en_US, timezone="Asia/Kolkata")
-| LogonTime := formatTime("%Y-%m-%d %H:%M:%S", field=LogonTime, locale=en_US, timezone="Asia/Kolkata")
+| PasswordLastSet := formatTime("%d-%b-%Y %H:%M:%S", field=PasswordLastSet, locale=en_US, timezone="Asia/Kolkata")
+| LogonTime := formatTime("%d-%b-%Y %H:%M:%S", field=LogonTime, locale=en_US, timezone="Asia/Kolkata")
 | table(["LogonTime", "aid", "UserName", ComputerName, "UserSid", "LogonType", "UserIsAdmin", "PasswordLastSet", "aip.city", "aip.state", "aip.country"])
 ```
 
@@ -4529,7 +4529,7 @@ setTimeInterval(start=1h, end=0h)
     collect([RemoteAddressIP4], limit=20),
     max(@timestamp, as=LastSeen)
   ])
-| formatTime("%Y-%m-%d %H:%M:%S", field=LastSeen, as=LastSeen)
+| formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen, as=LastSeen)
 | sort(UniqueRemoteIPs, order=desc, limit=200)
 ```
 
@@ -4868,8 +4868,8 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
 | file_copies > 50
 | time_diff_min := (end_time - start_time) / 60000
 | time_diff_min <= 10
-| start_time_fmt := formatTime("%Y-%m-%d %H:%M:%S", field=start_time, timezone="Asia/Kolkata")
-| end_time_fmt := formatTime("%Y-%m-%d %H:%M:%S", field=end_time, timezone="Asia/Kolkata")
+| start_time_fmt := formatTime("%d-%b-%Y %H:%M:%S", field=start_time, timezone="Asia/Kolkata")
+| end_time_fmt := formatTime("%d-%b-%Y %H:%M:%S", field=end_time, timezone="Asia/Kolkata")
 | drop([start_time, end_time])
 | sort(file_copies, order=desc)
 ```
@@ -4905,8 +4905,8 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
   ])
 
 // 5. Convert Epoch timestamps to human-readable UTC
-| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
-| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
+| FirstSeen := formatTime("%d-%b-%Y %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
+| LastSeen := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
 | drop([FirstSeenEpoch, LastSeenEpoch])
 
 // 6. Surface high-frequency and critical talkers first
@@ -4941,8 +4941,8 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
   ])
 
 // 4. Format timestamps into standard UTC strings
-| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
-| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
+| FirstSeen := formatTime("%d-%b-%Y %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
+| LastSeen := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
 | drop([FirstSeenEpoch, LastSeenEpoch])
 
 // 5. Order by query volume and present clean summary
@@ -5001,8 +5001,8 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
   ])
 
 // 9. Convert timestamps to IST (GMT+5:30)
-| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
-| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
+| FirstSeen := formatTime("%d-%b-%Y %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
+| LastSeen := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
 | drop([FirstSeenEpoch, LastSeenEpoch])
 
 | sort(SocketHits, order=desc)
@@ -5073,8 +5073,8 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
   ])
 
 // 8. Convert timestamps to IST (GMT+5:30)
-| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
-| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
+| FirstSeen := formatTime("%d-%b-%Y %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
+| LastSeen := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
 | drop([FirstSeenEpoch, LastSeenEpoch])
 
 // 9. Surface active offensive operations first
@@ -5110,8 +5110,8 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
   ])
 
 // 4. Format Timestamps to IST (GMT+5:30) and Calculate Attack Lifespan
-| LatestDetectionTime_IST := formatTime("%Y-%m-%d %H:%M:%S", field=LatestDetectionEpoch, timezone="Asia/Kolkata")
-| PatientZeroTime_IST := formatTime("%Y-%m-%d %H:%M:%S", field=PatientZeroEpoch, timezone="Asia/Kolkata")
+| LatestDetectionTime_IST := formatTime("%d-%b-%Y %H:%M:%S", field=LatestDetectionEpoch, timezone="Asia/Kolkata")
+| PatientZeroTime_IST := formatTime("%d-%b-%Y %H:%M:%S", field=PatientZeroEpoch, timezone="Asia/Kolkata")
 | CampaignDurationMinutes := (LatestDetectionEpoch - PatientZeroEpoch) / 60000
 | drop([PatientZeroEpoch, LatestDetectionEpoch])
 
@@ -5153,8 +5153,169 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
 | ExecutionCLI := coalesce([CommandLine, "-"])
 
 // 5. Structure High-Priority Escalation Table (Timestamp in 1st Column)
-| DetectionTime_IST := formatTime("%Y-%m-%d %H:%M:%S", field=@timestamp, timezone="Asia/Kolkata")
+| DetectionTime_IST := formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, timezone="Asia/Kolkata")
 | table([DetectionTime_IST, ComputerName, aid, UserAccount, DetectName, SeverityName, PatternDispositionDescription, Tactic, Technique, FileName, ParentBaseFileName, ExecutionCLI, FalconHostLink])
+| sort(@timestamp, order=desc)
+```
+
+---
+
+### Command 37: 360° Detection Root-Cause Analysis (RCA) & Process Ancestry Lineage
+* **Category**: Exploitation & Network / Threat Intelligence (Multi-OS)
+* **Objective**: End-to-end root cause analysis connecting Falcon detection alerts directly to the underlying process tree. Surfaces the grandparent, direct parent, binary, execution CLI arguments, prevention disposition, authenticated corporate user, and direct FalconHostLink.
+* **Key Operators**: `#event_simpleName = /DetectionSummaryEvent/, coalesce(), case { ... }, join({ProcessRollup2}), join({UserIdentity}), formatTime(format="%d-%b-%Y %H:%M:%S", timezone="Asia/Kolkata"), table()`
+* **Parameters & Scope**: Formats timestamp as `DD-MMM-YYYY` 24-hr IST in column 1. Resolves identity via AuthenticationId LUID. Connects process ancestry without null values. Includes subquery limit best practice.
+
+```cql
+// 1. Ingest Falcon Detection Summary Events
+#event_simpleName = /DetectionSummaryEvent/
+
+// 2. Preserve Native Detection Fields (Guarantees data even for NG-SIEM alerts)
+| DetectFileName := coalesce([FileName, "Unknown-Binary"])
+| DetectCommandLine := coalesce([CommandLine, "-"])
+| DetectUser := coalesce([UserName, user.name, "-"])
+| DetectHost := coalesce([ComputerName, "Unknown-Host"])
+| ProcId := coalesce([ContextProcessId, TargetProcessId])
+
+// 3. Classify Prevention Disposition (Was the adversary blocked or permitted?)
+| case {
+    PatternDispositionDescription = /kill|block|prevent|quarantine/i | DefenseOutcome := "PREVENTED (Neutralized)" ;
+    PatternDispositionDescription = /detect|policy disabled/i        | DefenseOutcome := "UNBLOCKED (Active Risk / Audit Mode)" ;
+    *                                                                | DefenseOutcome := coalesce([PatternDispositionDescription, "Investigate"]) ;
+  }
+
+// 4. Correlate with Process Execution Telemetry to pull complete Ancestry Lineage
+| join({
+    #event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/
+  }, field=[aid, ProcId], key=[aid, TargetProcessId], 
+     include=[GrandParentBaseFileName, ParentBaseFileName, FileName, CommandLine, SHA256HashData, AuthenticationId], mode=left, max=200000)
+
+// 5. Resolve authenticated user identity via AuthenticationId LUID
+| join({
+    #event_simpleName = UserIdentity
+  }, field=[aid, AuthenticationId], key=[aid, AuthenticationId], 
+     include=[UserName, user.name], mode=left)
+
+| UserAccount := coalesce([UserName, user.name, DetectUser, UserSid, "-"])
+| ExecutionCLI := coalesce([CommandLine, DetectCommandLine, "-"])
+
+// 6. Build Safe Ancestry Tree (Eliminates null -> null -> null)
+| case {
+    GrandParentBaseFileName != "" AND ParentBaseFileName != "" AND FileName != "" 
+      | FullAncestry := format("%s -> %s -> %s", field=[GrandParentBaseFileName, ParentBaseFileName, FileName]) ;
+    ParentBaseFileName != "" AND FileName != "" 
+      | FullAncestry := format("%s -> %s", field=[ParentBaseFileName, FileName]) ;
+    FileName != "" 
+      | FullAncestry := FileName ;
+    * 
+      | FullAncestry := DetectFileName ;
+  }
+
+// 7. Convert Timestamps to DD-MMM-YYYY 24-hr Indian Standard Time (IST, GMT+5:30)
+| DetectionTime_IST := formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, timezone="Asia/Kolkata")
+| table([DetectionTime_IST, ComputerName, aid, UserAccount, DetectName, SeverityName, DefenseOutcome, Tactic, Technique, FullAncestry, ExecutionCLI, SHA256HashData, FalconHostLink])
+| sort(@timestamp, order=desc)
+```
+
+---
+
+### Command 38: Pre-Incident Ingress Vector & "Patient Zero" Drop Timeline (30-Min Lookback)
+* **Category**: Exploitation & Network / Threat Intelligence (Multi-OS)
+* **Objective**: Correlates detection triggers with preceding file drops in Downloads/Temp and inbound network logons (RDP/SMB) on the same host within the 30 minutes leading up to the breach.
+* **Key Operators**: `(#event_simpleName = /DetectionSummaryEvent/ OR FileCreateForce OR UserLogon), case { ... }, formatTime(format="%d-%b-%Y %H:%M:%S", timezone="Asia/Kolkata"), sort(@timestamp, order=asc), table()`
+* **Parameters & Scope**: Ascending sort displays chronological chain of attack. Filters drops to executable/script extensions and logons to interactive/network types with DD-MMM-YYYY 24-hr IST times.
+
+```cql
+// 1. Ingest Detections, File Drops, and Remote Logons
+(#event_simpleName = /DetectionSummaryEvent/ 
+  OR #event_simpleName = "FileCreateForce" 
+  OR #event_simpleName = "UserLogon")
+
+// 2. Classify and Filter Telemetry using Native Boolean Filter Expressions
+| case {
+    #event_simpleName = /DetectionSummaryEvent/ 
+      | ActivityPhase := "💥 3. FALCON DETECTION FIRED" ;
+    #event_simpleName = "FileCreateForce" 
+      AND TargetFileName = /\.(?:exe|dll|ps1|vbs|bat|zip|7z|iso|lnk|hta|scr)$/i 
+      AND FilePath = /\(?:Downloads|AppData|Desktop|Temp)/i
+        | ActivityPhase := "📥 2. PRE-INCIDENT FILE DROP" ;
+    #event_simpleName = "UserLogon" 
+      AND (LogonType = 3 OR LogonType = 9 OR LogonType = 10)
+        | ActivityPhase := "🔑 1. PRE-INCIDENT USER LOGON" ;
+    * | ActivityPhase := "Baseline" ;
+  }
+
+// Discard background noise
+| ActivityPhase != "Baseline"
+
+// 3. Format Contextual Details per Phase
+| case {
+    ActivityPhase = "💥 3. FALCON DETECTION FIRED" 
+      | Details := format("DETECT: %s (%s) | Tactic: %s | CLI: %s", field=[DetectName, SeverityName, Tactic, CommandLine]) ;
+    ActivityPhase = "📥 2. PRE-INCIDENT FILE DROP" 
+      | Details := format("FILE WRITTEN: %s\%s by Process: %s", field=[FilePath, TargetFileName, ContextBaseFileName]) ;
+    ActivityPhase = "🔑 1. PRE-INCIDENT USER LOGON" 
+      | Details := format("LOGON: User: %s | Remote Origin IP (aip): %s | LogonType: %s", field=[UserName, aip, LogonType]) ;
+    * 
+      | Details := "-" ;
+  }
+
+// 4. Output Chronological Sequence in DD-MMM-YYYY 24-hr IST
+| EventTime_IST := formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, timezone="Asia/Kolkata")
+| table([EventTime_IST, ComputerName, ActivityPhase, Details])
+| sort(@timestamp, order=asc)
+```
+
+---
+
+### Command 39: Post-Detection Blast Radius, Persistence & Lateral Egress Hunt
+* **Category**: Exploitation & Network / Threat Intelligence (Multi-OS)
+* **Objective**: Audits post-detection activity on suspect endpoints, exposing secondary discovery commands (whoami, net, tasklist), outbound non-standard network sockets with GeoIP/ASN, and newly registered registry Run keys.
+* **Key Operators**: `(#event_simpleName = ProcessRollup2 OR NetworkConnectIP4 OR AsepValueUpdate), case { ... }, ipLocation(), asn(), formatTime(format="%d-%b-%Y %H:%M:%S", timezone="Asia/Kolkata"), sort(), table()`
+* **Parameters & Scope**: Enriches destination IP with Country, Org/ISP. Scopes to discovery LOLBins, non-standard egress ports, and ASEP run keys. Formatted in DD-MMM-YYYY 24-hr IST.
+
+```cql
+// 1. Scope across Execution, Network & Persistence Telemetry
+(#event_simpleName = "ProcessRollup2" 
+  OR #event_simpleName = "NetworkConnectIP4" 
+  OR #event_simpleName = "AsepValueUpdate" 
+  OR #event_simpleName = "RegKeyCreate")
+
+// 2. Filter High-Risk Post-Detection Actions using Pure Boolean Filter Syntax
+| case {
+    #event_simpleName = "NetworkConnectIP4" 
+      AND RemotePort != 80 AND RemotePort != 443 AND RemotePort != 8080
+        | ThreatCategory := "⚠️ Outbound Non-Standard Network Socket" ;
+    #event_simpleName = "ProcessRollup2" 
+      AND FileName = /(?:powershell|cmd|whoami|net|nltest|quser|certutil|rundll32|reg|tasklist)\.exe$/i 
+        | ThreatCategory := "⚠️ Adversary Discovery / LOLBin Execution" ;
+    #event_simpleName = "AsepValueUpdate" 
+      AND RegObjectName = /CurrentVersion\Run/i 
+        | ThreatCategory := "⚠️ Run Key Persistence Established" ;
+    * | ThreatCategory := "Baseline" ;
+  }
+
+| ThreatCategory != "Baseline"
+
+// 3. Enrich Network Telemetry with GeoIP and ASN
+| ipLocation(RemoteAddressIP4)
+| asn(RemoteAddressIP4)
+
+// 4. Summarize Post-Exploitation Actions
+| case {
+    #event_simpleName = "NetworkConnectIP4" 
+      | ActionSummary := format("Connected to %s:%s (%s, %s) via %s", field=[RemoteAddressIP4, RemotePort, RemoteAddressIP4.country, RemoteAddressIP4.org, ContextBaseFileName]) ;
+    #event_simpleName = "ProcessRollup2" 
+      | ActionSummary := format("Spawned %s | CLI: %s (Parent: %s)", field=[FileName, CommandLine, ParentBaseFileName]) ;
+    #event_simpleName = "AsepValueUpdate" 
+      | ActionSummary := format("Persistence Run Key Added: %s -> %s", field=[TargetValueName, TargetValueData]) ;
+    * 
+      | ActionSummary := "-" ;
+  }
+
+// 5. Output in DD-MMM-YYYY 24-hr IST
+| EventTime_IST := formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, timezone="Asia/Kolkata")
+| table([EventTime_IST, ComputerName, UserName, ThreatCategory, ActionSummary])
 | sort(@timestamp, order=desc)
 ```
 
