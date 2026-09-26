@@ -847,7 +847,40 @@ Windows file paths and process names are case-insensitive. Always append `/i`:
 | FileName=/powershell\.exe/i
 ```
 
-#### 2. Anchors (`^` and `$`) — The Speed Multiplier
+#### 2. Contiguous Substring ("Contains") Matching & Dynamic Token Capture
+A common threat hunting requirement is to filter all events where a specific string sequence appears **together (contiguous/unbroken)** regardless of surrounding characters (e.g. `nxc`), while rejecting instances where the characters are dispersed across words or separated by intermediate letters.
+
+##### The Contiguous Substring Rule:
+Because PCRE regular expressions in LogScale are **unanchored by default**, specifying `/nxc/i` strictly requires `n`, `x`, and `c` to appear in consecutive succession:
+
+| Candidate Value | Contiguous Sequence? | Evaluates `/nxc/i` | Reason / Token Anatomy |
+| :--- | :--- | :--- | :--- |
+| `nxcom` | **Yes** | ✅ **MATCH** | Begins with contiguous `nxc` (`nxc` + `om`) |
+| `penxcs` | **Yes** | ✅ **MATCH** | Contains contiguous `nxc` (`pe` + `nxc` + `s`) |
+| `n-nxcd` | **Yes** | ✅ **MATCH** | Contains contiguous `nxc` (`n-` + `nxc` + `d`) |
+| `NEXNXC` | **Yes** | ✅ **MATCH** | Uppercase contiguous match (`NEX` + `NXC`) |
+| `NEXConnxcess` | **Yes** | ✅ **MATCH** | Contiguous substring (`NEXCon` + `nxc` + `ess`) |
+| `nxamplc` | **No** | ❌ **REJECT** | Letters are separated by `ampl` (`nx` + `ampl` + `c`) |
+| `next-com` | **No** | ❌ **REJECT** | Letters `n`, `x`, `c` are non-contiguous |
+| `nextessc` | **No** | ❌ **REJECT** | Letters are not contiguous |
+
+##### Production Hunting Patterns for Contiguous Sequences:
+```cql
+// Pattern 1: Fast inline filter (filters any event containing unbroken "nxc")
+#event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/
+| CommandLine = /nxc/i
+
+// Pattern 2: Filter AND dynamically capture the exact word/token containing "nxc"
+#event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/
+| regex("(?i)(?<MatchedToken>[^\s"'>]*nxc[^\s"'>]*)", field=CommandLine)
+| table([@timestamp, ComputerName, UserName, MatchedToken, CommandLine])
+
+// Pattern 3: Discrete Word Boundary (Matches ONLY "nxc" or "nxc.exe" as a standalone tool, NOT "nxcom")
+| CommandLine = /\bnxc(?:\.exe)?\b/i
+```
+
+
+#### 3. Anchors (`^` and `$`) — The Speed Multiplier
 - `^` anchors to the **very start** of the text.
 - `$` anchors to the **very end** of the text.
 - **The Performance Rule**: Unanchored patterns force LogScale to evaluate every character offset in the string. Anchored patterns fail fast on byte 1.
@@ -863,7 +896,7 @@ Windows file paths and process names are case-insensitive. Always append `/i`:
 | FileName=/^cmd\.exe$/i
 ```
 
-#### 3. Escaping Special Characters
+#### 4. Escaping Special Characters
 Characters that have syntactic meaning in PCRE must be escaped with a backslash (`\`):
 `\` `. * + ? ^ $ { } [ ] ( ) | /`
 
@@ -1080,6 +1113,7 @@ Promote matches into new, first-class fields using named capture groups `(?<Fiel
 | `.` | Any character except newline | `a.c` matches `abc`, `a1c` |
 | `^` | Beginning of string anchor | `^C:\\Windows` matches path start |
 | `$` | End of string anchor | `\.exe$` matches executable ending |
+| `/keyword/i` | Contiguous Substring ("Contains") | `/nxc/i` (matches `nxcom`, `penxcs`, `NEXNXC`; rejects `nxamplc`) |
 | `\b` | Word boundary | `\bnet\b` matches word `net`, not `internet` |
 | `\d` | Digit `[0-9]` | `:\d{2,5}$` matches network port |
 | `\w` | Word character `[a-zA-Z0-9_]` | `\w+\.ps1` matches script name |
