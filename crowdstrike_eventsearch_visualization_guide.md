@@ -1509,3 +1509,25 @@ The **CrowdStrike Advanced Query Hub** commands introduce advanced correlation c
   | table([user.name, source.address, file_copies, time_diff_min, start_time_fmt, end_time_fmt])
   | sort(file_copies, order=desc)
   ```
+
+- **360 Destination IP & Geolocation Heatmap (Playbook 31)**:
+  Pipe remote IP connections with GeoIP coordinates into a World Map Widget or Geographic Density Table:
+  ```cql
+  | groupBy([RemoteAddressIP4.country, RemoteAddressIP4.city, RemoteAddressIP4.org, RemoteAddressIP4], function=count(as=Connections))
+  | sort(Connections, order=desc)
+  ```
+
+- **360 Destination Domain Request Frequency (Playbook 32)**:
+  Plot DNS lookups per domain and requesting binary across endpoints using a Multi-Metric Bar Chart:
+  ```cql
+  | groupBy([DomainName, ContextBaseFileName], function=count(as=QueryCount))
+  | sort(QueryCount, order=desc, limit=25)
+  ```
+
+- **Master 360 Domain / IP / URI Flow Sankey (Playbook 33)**:
+  Visualize process-to-domain-to-IP egress flows using a multi-stage Sankey Diagram linking initiating binary, resolved domain, and destination IP:
+  ```cql
+  | groupBy([ContextBaseFileName, DomainName, RemoteAddressIP4], function=count(as=FlowVolume))
+  | sort(FlowVolume, order=desc, limit=30)
+  ```
+

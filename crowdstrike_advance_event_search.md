@@ -4740,3 +4740,138 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
 ```
 
 ---
+
+### Command 31: 360 Destination IP Forensic Communication Profile (Host, Process Lineage, Geolocation & ASN)
+* **Category**: Exploitation & Network (Multi-OS)
+* **Objective**: Comprehensive 360-degree forensic profile on any destination IP, capturing contacting endpoints, user identity, process lineage, CLI invocations, destination ports, connection volumes, Geolocation (Country/City), and ISP Autonomous System information.
+* **Key Operators**: `#event_simpleName = NetworkConnectIP4, ipLocation(), asn(), join({ProcessRollup2}, field=[aid, ContextProcessId], key=[aid, TargetProcessId]), groupBy(), formatTime(), table()`
+* **Parameters & Scope**: Target IP can be set via parameter (`RemoteAddressIP4 = ?DestinationIP`) or exact IP literal (`8.2.8.2`). Formats FirstSeen/LastSeen to UTC.
+
+```cql
+// 1. Scope to outbound network connection telemetry and filter by target IP
+#event_simpleName = NetworkConnectIP4
+| RemoteAddressIP4 = 8.2.8.2 // Replace with literal (e.g. "185.220.101.5") or keep ?DestinationIP parameter
+
+// 2. Enrich with Geolocation & ISP / Autonomous System Intelligence
+| ipLocation(RemoteAddressIP4)
+| asn(RemoteAddressIP4)
+
+// 3. Correlate with Process Execution Telemetry to pull complete execution context
+| join({
+    #event_simpleName = ProcessRollup2
+  }, field=[aid, ContextProcessId], key=[aid, TargetProcessId], include=[ParentBaseFileName, FileName, CommandLine, UserName, SHA256HashData], mode=left)
+
+// 4. Aggregate by Host, Binary, Port, and Geolocation metadata
+| groupBy([ComputerName, aid, UserName, ContextBaseFileName, RemoteAddressIP4, RemotePort, RemoteAddressIP4.country, RemoteAddressIP4.city, RemoteAddressIP4.org], function=[
+    count(as=TotalConnections),
+    min(@timestamp, as=FirstSeenEpoch),
+    max(@timestamp, as=LastSeenEpoch),
+    collect([UserName, ParentBaseFileName, CommandLine, SHA256HashData])
+  ])
+
+// 5. Convert Epoch timestamps to human-readable UTC
+| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
+| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")
+| drop([FirstSeenEpoch, LastSeenEpoch])
+
+// 6. Surface high-frequency and critical talkers first
+| sort(TotalConnections, order=desc)
+| table([FirstSeen, LastSeen, ComputerName, aid, ContextBaseFileName, ParentBaseFileName, UserName, RemoteAddressIP4, RemotePort, RemoteAddressIP4.country, RemoteAddressIP4.city, RemoteAddressIP4.org, TotalConnections, CommandLine, SHA256HashData])
+```
+
+---
+
+### Command 32: 360 Destination Domain Forensic Communication Profile (DNS Lookups, Resolved IPs & Process Lineage)
+* **Category**: Browser & DNS (Multi-OS)
+* **Objective**: Deep 360-degree forensic profile on any destination domain or subdomain pattern, auditing DNS request activity across endpoints, resolved IP records (`IP4Records`), query frequency, user accounts, and initiating process binaries.
+* **Key Operators**: `#event_simpleName = DnsRequest, DomainName = /(?:^|\.)hcl\.com$/i, join({ProcessRollup2}, field=[aid, ContextProcessId], key=[aid, TargetProcessId]), groupBy(), formatTime(), table()`
+* **Parameters & Scope**: Domain filter uses flexible PCRE regex to capture base domains and any subdomain (e.g. `/(?:^|\.)hcl\.com$/i`). Formats first/last seen to UTC.
+
+```cql
+// 1. Scope to DNS Request telemetry (supports exact match, parameter, or regex pattern)
+#event_simpleName = DnsRequest
+| DomainName = /(?:^|\.)hcl\.com$/i // Or use regex: DomainName = /(?:^|\.)targetdomain\.com$/i
+
+// 2. Correlate with Process Execution Telemetry to identify the requesting binary and parent tree
+| join({
+    #event_simpleName = ProcessRollup2
+  }, field=[aid, ContextProcessId], key=[aid, TargetProcessId], include=[ParentBaseFileName, FileName, CommandLine, UserName, SHA256HashData], mode=left)
+
+// 3. Aggregate DNS queries across endpoints, processes, and resolved IPs
+| groupBy([ComputerName, aid, UserName, ContextBaseFileName, DomainName], function=[
+    count(as=QueryCount),
+    min(@timestamp, as=FirstSeenEpoch),
+    max(@timestamp, as=LastSeenEpoch),
+    collect([UserName, ParentBaseFileName, CommandLine, SHA256HashData, IP4Records])
+  ])
+
+// 4. Format timestamps into standard UTC strings
+| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
+| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")
+| drop([FirstSeenEpoch, LastSeenEpoch])
+
+// 5. Order by query volume and present clean summary
+| sort(QueryCount, order=desc)
+| table([FirstSeen, LastSeen, ComputerName, aid, ContextBaseFileName, ParentBaseFileName, UserName, DomainName, IP4Records, QueryCount, CommandLine, SHA256HashData])
+```
+
+---
+
+### Command 33: Master 360 Destination Domain/IP/URI Multi-Event Forensic Visibility
+* **Category**: Exploitation & Network (Multi-OS)
+* **Objective**: End-to-end multi-event cross-correlation linking DNS resolutions directly to subsequent outbound TCP/UDP socket connections. Enriches remote IP with GeoIP/ASN, joins UserIdentity for guaranteed corporate username resolution, and extracts full URI paths from command-line invocations.
+* **Key Operators**: `#event_simpleName = NetworkConnectIP4, join({DnsRequest}, mode=inner), ipLocation(), asn(), join({ProcessRollup2|SyntheticProcessRollup2}, mode=left), join({UserIdentity}, mode=left), regex(?<FullURI>), coalesce(), groupBy(), formatTime(), table()`
+* **Parameters & Scope**: Covers both newly spawned and long-running browser processes (`SyntheticProcessRollup2`). Resolves `AuthenticationId` to human username via `UserIdentity`.
+
+```cql
+// 1. Ingest outbound network sockets
+#event_simpleName = NetworkConnectIP4
+
+// 2. Inner join with DNS resolution
+// Regex /(?:^|\.)naukri\.com$/i dynamically matches naukri.com, www.naukri.com, s1.naukri.com, etc.
+| join({
+    #event_simpleName = DnsRequest
+    | DomainName = /(?:^|\.)naukri\.com$/i
+  }, field=[aid, ContextProcessId], key=[aid, ContextProcessId], include=[DomainName], mode=inner)
+
+// 3. Geolocation & ASN enrichment on destination IP
+| ipLocation(RemoteAddressIP4)
+| asn(RemoteAddressIP4)
+
+// 4. Join process execution (covers BOTH newly spawned and long-running synthetic processes)
+| join({
+    #event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/
+  }, field=[aid, ContextProcessId], key=[aid, TargetProcessId],
+     include=[ParentBaseFileName, CommandLine, UserName, user.name, UserSid, AuthenticationId], mode=left)
+
+// 5. Bridge AuthenticationId to UserIdentity to resolve the human-readable username
+| join({
+    #event_simpleName = UserIdentity
+  }, field=[aid, AuthenticationId], key=[aid, AuthenticationId],
+     include=[UserName, user.name], mode=left)
+
+// 6. Resolve UserAccount
+| UserAccount := coalesce([UserName, user.name, UserSid, "-"])
+
+// 7. Extract any full URI / URL present in the CommandLine invocation (e.g. from Outlook, CLI, or shortcuts)
+| regex("(?<FullURI>https?://[^\s\"'>]+)", field=CommandLine, strict=false)
+| FullURI := coalesce([FullURI, format("https://%s/", field=[DomainName])])
+
+// 8. Group and summarize the end-to-end chain
+| groupBy([ComputerName, aid, ContextBaseFileName, DomainName, FullURI, RemoteAddressIP4, RemotePort, RemoteAddressIP4.country, RemoteAddressIP4.org, UserAccount], function=[
+    count(as=SocketHits),
+    min(@timestamp, as=FirstSeenEpoch),
+    max(@timestamp, as=LastSeenEpoch),
+    collect([ParentBaseFileName, CommandLine])
+  ])
+
+// 9. Convert timestamps to UTC
+| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
+| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")
+| drop([FirstSeenEpoch, LastSeenEpoch])
+
+| sort(SocketHits, order=desc)
+| table([FirstSeen, LastSeen, ComputerName, ContextBaseFileName, ParentBaseFileName, UserAccount, DomainName, FullURI, RemoteAddressIP4, RemotePort, RemoteAddressIP4.country, RemoteAddressIP4.org, SocketHits, CommandLine])
+```
+
+---
