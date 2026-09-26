@@ -451,7 +451,7 @@ Filter **after** aggregation to surface anomalies, brute-force attempts, and out
 ##### Stage 6: FORMAT & PROJECT (Display Preparation)
 Prepare the final columns and clean up raw clutter:
 - **Tabular Projection**: `table([ComputerName, UserName, FailedLogons, TotalLogons])`.
-- **Time Formatting**: `_timestamp := formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp)`.
+- **Time Formatting**: `_timestamp := formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, timezone="Asia/Kolkata")`.
 - **Column Aliasing**: `rename(field=FailedLogons, as="Failed Attempts")`.
 
 ##### Stage 7: SORT & SLICE (Final Ordering)
@@ -2088,13 +2088,13 @@ CommandLine=/[A-Za-z0-9+/]{40,}={0,2}/
 
 #### 48. Business Hours Filter (09:00 - 17:00)
 ```cql
-| eval(Hour = formatTime("%H", field=@timestamp, as=Hour)) 
+| eval(Hour = formatTime("%H", field=@timestamp, as=Hour, timezone="Asia/Kolkata")) 
 | Hour >= 9 AND Hour <= 17
 ```
 
 #### 49. After-Hours Anomalous Execution Filter
 ```cql
-| eval(Hour = formatTime("%H", field=@timestamp, as=Hour)) 
+| eval(Hour = formatTime("%H", field=@timestamp, as=Hour, timezone="Asia/Kolkata")) 
 | Hour < 8 OR Hour > 18
 ```
 *Surfaces user activity occurring overnight outside core shifts.*
@@ -3183,7 +3183,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
 ```cql
 #repo="base_sensor" #event_simpleName="ProcessRollup2"
 | FileName=/powershell\.exe$/i
-| eval(ExecutionTime = formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, as=ExecutionTime))
+| eval(ExecutionTime = formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, as=ExecutionTime, timezone="Asia/Kolkata"))
 | rename(field=ComputerName, as="Target Host")
 | rename(field=UserName, as="Executing Account")
 | rename(field=CommandLine, as="CLI Invocation")
@@ -3234,7 +3234,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
 #repo="base_sensor" #event_simpleName="NetworkConnectIP4"
 | in(field=RemotePort, values=[443, 80, 8080])
 | bucket(span=15m)
-| eval(TimeSlot = formatTime("%H:%M", field=_bucket, as=TimeSlot))
+| eval(TimeSlot = formatTime("%H:%M", field=_bucket, as=TimeSlot, timezone="Asia/Kolkata"))
 | groupBy([TimeSlot, RemotePort], function=count(as="Connections"))
 | sort(TimeSlot, order=asc)
 ```
@@ -3251,7 +3251,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
     max(@timestamp, as=LastSeen)
   ])
 | FailedAttempts >= 5
-| LastFailed := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen)
+| LastFailed := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen, timezone="Asia/Kolkata")
 | sort(FailedAttempts, order=desc, limit=50)
 | table([UserName, RemoteAddressIP4, FailedAttempts, TargetHosts, LastFailed])
 ```
@@ -3290,7 +3290,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
     DayNum=7             | DayName := "Sun" ;
     *                    | DayName := "Unknown" ;
   }
-| eval(HourOfDay = formatTime("%H", field=@timestamp, as=HourOfDay))
+| eval(HourOfDay = formatTime("%H", field=@timestamp, as=HourOfDay, timezone="Asia/Kolkata"))
 | groupBy([DayName, HourOfDay], function=count(as="LoginDensity"))
 ```
 
@@ -3404,7 +3404,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
     max(@timestamp, as=LastSeen),
     collect(CommandLine, limit=1, as=SampleCLI)
   ])
-| LastExecution := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen)
+| LastExecution := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen, timezone="Asia/Kolkata")
 | sort(InvocationCount, order=desc, limit=100)
 | table([LastExecution, ComputerName, UserName, LineageChain, is_enc, InvocationCount, SampleCLI])
 ```
@@ -3919,8 +3919,8 @@ Expose abnormal activity occurring during weekends or outside regular working ho
 
 ```cql
 #event_simpleName="UserLogon"
-| DayOfWeek := formatTime("%A", field=@timestamp)
-| HourOfDay := formatTime("%H", field=@timestamp)
+| DayOfWeek := formatTime("%A", field=@timestamp, timezone="Asia/Kolkata")
+| HourOfDay := formatTime("%H", field=@timestamp, timezone="Asia/Kolkata")
 | groupBy([DayOfWeek, HourOfDay], function=count(as=Logons))
 ```
 
@@ -3978,7 +3978,7 @@ Convert raw epoch or ISO timestamps into localized SOC shift formats.
 
 ```cql
 #event_simpleName="UserLogon"
-| ShiftTime := formatTime("%d-%b-%Y %H:%M:%S UTC", field=@timestamp)
+| ShiftTime := formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, timezone="Asia/Kolkata")
 | table([ShiftTime, ComputerName, UserName, LogonType])
 | head(50)
 ```
@@ -4085,7 +4085,7 @@ Detect short-lived, high-frequency bursts that bypass standard hourly thresholds
 | bucket(span=1m)
 | groupBy([ComputerName, UserName, _bucket], function=count(as=FailureCount))
 | FailureCount > 10
-| AlertTime := formatTime("%H:%M:%S", field=_bucket)
+| AlertTime := formatTime("%d-%b-%Y %H:%M:%S", field=_bucket, timezone="Asia/Kolkata")
 | table([AlertTime, ComputerName, UserName, FailureCount])
 | sort(FailureCount, order=desc)
 ```
@@ -4129,7 +4129,7 @@ A composite dashboard query providing an end-to-end incident summary in a single
 | **Basic Count** | `\| groupBy(Field, function=count())` | Counts events per key |
 | **Multi-Metric Group** | `\| groupBy(Field, function=[count(), avg(X), max(Y)])` | Computes multiple statistics simultaneously |
 | **Percentiles** | `\| stats(percentile(X, percentiles=[50,90,99]))` | Statistical anomaly baselining |
-| **Time Formatting** | `\| Formatted := formatTime("%Y-%m-%d %H:%M", field=@timestamp)` | Localized human-readable timestamps |
+| **Time Formatting** | `\| Formatted := formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, timezone="Asia/Kolkata")` | Localized human-readable timestamps |
 | **Ternary Mapping** | `\| Status := test(Metric > 100) ? "ALERT" : "OK"` | Inline conditional tagging |
 
 ---
@@ -4441,7 +4441,7 @@ setTimeInterval(start=1h, end=0h)
 * **Category**: Authentication (Windows)
 * **Objective**: Differentiates benign user typos from targeted password spray or credential brute-forcing, detailing first/last failed attempts, successful logins, host targets, and password age.
 * **Key Operators**: `case{#event_simpleName=UserLogon...}, groupBy([UserSid, UserName]), min/max timestamps, count(), selectFromMax(), $falcon/helper:enrich(), formatTime(), default()`
-* **Parameters & Scope**: Threshold: TotalFailedLogins > 3. Automatically formats timestamps in EST/UTC. Enriches UserLogonFlags via Falcon helper module.
+* **Parameters & Scope**: Threshold: TotalFailedLogins > 3. Automatically formats timestamps in 24-hr IST (DD-MMM-YYYY). Enriches UserLogonFlags via Falcon helper module.
 
 ```cql
 #event_simpleName=/UserLogon/
@@ -4460,10 +4460,10 @@ setTimeInterval(start=1h, end=0h)
   ])
 | TotalFailedLogins > 3
 | $falcon/helper:enrich(field=UserLogonFlags)
-| formatTime(format="%F %T", field=FirstFailedLogon, as="FirstFailedLogon", timezone="Asia/Kolkata")
-| formatTime(format="%F %T", field=LastFailedLogon, as="LastFailedLogon", timezone="Asia/Kolkata")
-| formatTime(format="%F %T", field=LastSuccessfulLogin, as="LastSuccessfulLogin", timezone="Asia/Kolkata")
-| PasswordLastSet := PasswordLastSet * 1000 | formatTime(format="%F %T", field=PasswordLastSet, as="PasswordLastSet", timezone="Asia/Kolkata")
+| formatTime(format="%d-%b-%Y %H:%M:%S", field=FirstFailedLogon, as="FirstFailedLogon", timezone="Asia/Kolkata")
+| formatTime(format="%d-%b-%Y %H:%M:%S", field=LastFailedLogon, as="LastFailedLogon", timezone="Asia/Kolkata")
+| formatTime(format="%d-%b-%Y %H:%M:%S", field=LastSuccessfulLogin, as="LastSuccessfulLogin", timezone="Asia/Kolkata")
+| PasswordLastSet := PasswordLastSet * 1000 | formatTime(format="%d-%b-%Y %H:%M:%S", field=PasswordLastSet, as="PasswordLastSet", timezone="Asia/Kolkata")
 | default(value="-", field=[FirstFailedLogon, LastFailedLogon, LastSuccessfulLogin, TotalSuccessfulLogins, TotalFailedLogins, PasswordLastSet, LastLoggedOnHost])
 | sort(TotalFailedLogins, order=desc, limit=20000)
 ```
@@ -4529,7 +4529,7 @@ setTimeInterval(start=1h, end=0h)
     collect([RemoteAddressIP4], limit=20),
     max(@timestamp, as=LastSeen)
   ])
-| formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen, as=LastSeen)
+| formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen, as=LastSeen, timezone="Asia/Kolkata")
 | sort(UniqueRemoteIPs, order=desc, limit=200)
 ```
 
@@ -4665,7 +4665,7 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
 | aid=~match(file="aid_master_main.csv", column=[aid], strict=false)
 
 // Convert timestamp to human-readable value
-| formatTime(format="%F %T %Z", as=StartTimestamp, field=StartTimestamp)
+| formatTime(format="%d-%b-%Y %H:%M:%S", timezone="Asia/Kolkata", as=StartTimestamp, field=StartTimestamp)
 ```
 
 ---
@@ -4836,10 +4836,10 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
   ]))
 | TotalFailedLogins > 3
 | $falcon/helper:enrich(field=UserLogonFlags)
-| formatTime(format="%F %T", field=FirstFailedLogon, as="FirstFailedLogon", timezone="Asia/Kolkata")
-| formatTime(format="%F %T", field=LastFailedLogon, as="LastFailedLogon", timezone="Asia/Kolkata")
-| formatTime(format="%F %T", field=LastSuccessfulLogin, as="LastSuccessfulLogin", timezone="Asia/Kolkata")
-| PasswordLastSet := PasswordLastSet * 1000 | formatTime(format="%F %T", field=PasswordLastSet, as="PasswordLastSet", timezone="Asia/Kolkata")
+| formatTime(format="%d-%b-%Y %H:%M:%S", field=FirstFailedLogon, as="FirstFailedLogon", timezone="Asia/Kolkata")
+| formatTime(format="%d-%b-%Y %H:%M:%S", field=LastFailedLogon, as="LastFailedLogon", timezone="Asia/Kolkata")
+| formatTime(format="%d-%b-%Y %H:%M:%S", field=LastSuccessfulLogin, as="LastSuccessfulLogin", timezone="Asia/Kolkata")
+| PasswordLastSet := PasswordLastSet * 1000 | formatTime(format="%d-%b-%Y %H:%M:%S", field=PasswordLastSet, as="PasswordLastSet", timezone="Asia/Kolkata")
 | default(value="-", field=[FirstFailedLogon, LastFailedLogon, LastSuccessfulLogin, TotalSuccessfulLogins, TotalFailedLogins, PasswordLastSet, LastLoggedOnHost])
 // Sort by total successful to see if there was successful compromise
 | sort(TotalSuccessfulLogins, order=desc, limit=20000)
@@ -4904,7 +4904,7 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
     collect([UserName, ParentBaseFileName, CommandLine, SHA256HashData])
   ])
 
-// 5. Convert Epoch timestamps to human-readable UTC
+// 5. Convert Epoch timestamps to human-readable IST (DD-MMM-YYYY 24-hr format)
 | FirstSeen := formatTime("%d-%b-%Y %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
 | LastSeen := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
 | drop([FirstSeenEpoch, LastSeenEpoch])

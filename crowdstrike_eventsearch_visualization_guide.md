@@ -462,7 +462,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
 ```cql
 #repo="base_sensor" #event_simpleName="ProcessRollup2"
 | FileName=/powershell\.exe$/i
-| eval(ExecutionTime = formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, as=ExecutionTime))
+| eval(ExecutionTime = formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, as=ExecutionTime, timezone="Asia/Kolkata"))
 | rename(field=ComputerName, as="Target Host")
 | rename(field=UserName, as="Executing Account")
 | rename(field=CommandLine, as="CLI Invocation")
@@ -513,7 +513,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
 #repo="base_sensor" #event_simpleName="NetworkConnectIP4"
 | in(field=RemotePort, values=[443, 80, 8080])
 | bucket(span=15m)
-| eval(TimeSlot = formatTime("%H:%M", field=_bucket, as=TimeSlot))
+| eval(TimeSlot = formatTime("%H:%M", field=_bucket, as=TimeSlot, timezone="Asia/Kolkata"))
 | groupBy([TimeSlot, RemotePort], function=count(as="Connections"))
 | sort(TimeSlot, order=asc)
 ```
@@ -530,7 +530,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
     max(@timestamp, as=LastSeen)
   ])
 | FailedAttempts >= 5
-| LastFailed := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen)
+| LastFailed := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen, timezone="Asia/Kolkata")
 | sort(FailedAttempts, order=desc, limit=50)
 | table([UserName, RemoteAddressIP4, FailedAttempts, TargetHosts, LastFailed])
 ```
@@ -569,7 +569,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
     DayNum=7             | DayName := "Sun" ;
     *                    | DayName := "Unknown" ;
   }
-| eval(HourOfDay = formatTime("%H", field=@timestamp, as=HourOfDay))
+| eval(HourOfDay = formatTime("%H", field=@timestamp, as=HourOfDay, timezone="Asia/Kolkata"))
 | groupBy([DayName, HourOfDay], function=count(as="LoginDensity"))
 ```
 
@@ -683,7 +683,7 @@ Below is an analytical catalog of 16 battle-tested queries covering all visualiz
     max(@timestamp, as=LastSeen),
     collect(CommandLine, limit=1, as=SampleCLI)
   ])
-| LastExecution := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen)
+| LastExecution := formatTime("%d-%b-%Y %H:%M:%S", field=LastSeen, timezone="Asia/Kolkata")
 | sort(InvocationCount, order=desc, limit=100)
 | table([LastExecution, ComputerName, UserName, LineageChain, is_enc, InvocationCount, SampleCLI])
 ```
@@ -1119,8 +1119,8 @@ Expose abnormal activity occurring during weekends or outside regular working ho
 
 ```cql
 #event_simpleName="UserLogon"
-| DayOfWeek := formatTime("%A", field=@timestamp)
-| HourOfDay := formatTime("%H", field=@timestamp)
+| DayOfWeek := formatTime("%A", field=@timestamp, timezone="Asia/Kolkata")
+| HourOfDay := formatTime("%H", field=@timestamp, timezone="Asia/Kolkata")
 | groupBy([DayOfWeek, HourOfDay], function=count(as=Logons))
 ```
 
@@ -1178,7 +1178,7 @@ Convert raw epoch or ISO timestamps into localized SOC shift formats.
 
 ```cql
 #event_simpleName="UserLogon"
-| ShiftTime := formatTime("%d-%b-%Y %H:%M:%S UTC", field=@timestamp)
+| ShiftTime := formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, timezone="Asia/Kolkata")
 | table([ShiftTime, ComputerName, UserName, LogonType])
 | head(50)
 ```
@@ -1285,7 +1285,7 @@ Detect short-lived, high-frequency bursts that bypass standard hourly thresholds
 | bucket(span=1m)
 | groupBy([ComputerName, UserName, _bucket], function=count(as=FailureCount))
 | FailureCount > 10
-| AlertTime := formatTime("%H:%M:%S", field=_bucket)
+| AlertTime := formatTime("%d-%b-%Y %H:%M:%S", field=_bucket, timezone="Asia/Kolkata")
 | table([AlertTime, ComputerName, UserName, FailureCount])
 | sort(FailureCount, order=desc)
 ```
@@ -1329,7 +1329,7 @@ A composite dashboard query providing an end-to-end incident summary in a single
 | **Basic Count** | `\| groupBy(Field, function=count())` | Counts events per key |
 | **Multi-Metric Group** | `\| groupBy(Field, function=[count(), avg(X), max(Y)])` | Computes multiple statistics simultaneously |
 | **Percentiles** | `\| stats(percentile(X, percentiles=[50,90,99]))` | Statistical anomaly baselining |
-| **Time Formatting** | `\| Formatted := formatTime("%Y-%m-%d %H:%M", field=@timestamp)` | Localized human-readable timestamps |
+| **Time Formatting** | `\| Formatted := formatTime("%d-%b-%Y %H:%M:%S", field=@timestamp, timezone="Asia/Kolkata")` | Localized human-readable timestamps |
 | **Ternary Mapping** | `\| Status := test(Metric > 100) ? "ALERT" : "OK"` | Inline conditional tagging |
 
 ---
