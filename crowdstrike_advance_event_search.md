@@ -620,8 +620,8 @@ When hunting for an organization, user, or domain keyword (e.g., `naukri`), anal
       max(@timestamp, as=LastSeenEpoch)
     ])
   | DwellMinutes := (LastSeenEpoch - FirstSeenEpoch) / 60000
-  | FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
-  | LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")
+  | FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
+  | LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
   | drop([FirstSeenEpoch, LastSeenEpoch])
   ```
 
@@ -4227,8 +4227,8 @@ event_platform=Win
   }
 | PasswordLastSet := PasswordLastSet * 1000
 | LogonTime := LogonTime * 1000
-| PasswordLastSet := formatTime("%Y-%m-%d %H:%M:%S", field=PasswordLastSet, locale=en_US, timezone=Z)
-| LogonTime := formatTime("%Y-%m-%d %H:%M:%S", field=LogonTime, locale=en_US, timezone=Z)
+| PasswordLastSet := formatTime("%Y-%m-%d %H:%M:%S", field=PasswordLastSet, locale=en_US, timezone="Asia/Kolkata")
+| LogonTime := formatTime("%Y-%m-%d %H:%M:%S", field=LogonTime, locale=en_US, timezone="Asia/Kolkata")
 | table(["LogonTime", "aid", "UserName", ComputerName, "UserSid", "LogonType", "UserIsAdmin", "PasswordLastSet", "aip.city", "aip.state", "aip.country"])
 ```
 
@@ -4460,10 +4460,10 @@ setTimeInterval(start=1h, end=0h)
   ])
 | TotalFailedLogins > 3
 | $falcon/helper:enrich(field=UserLogonFlags)
-| formatTime(format="%F %T", field=FirstFailedLogon, as="FirstFailedLogon", timezone="EST")
-| formatTime(format="%F %T", field=LastFailedLogon, as="LastFailedLogon", timezone="EST")
-| formatTime(format="%F %T", field=LastSuccessfulLogin, as="LastSuccessfulLogin", timezone="EST")
-| PasswordLastSet := PasswordLastSet * 1000 | formatTime(format="%F %T", field=PasswordLastSet, as="PasswordLastSet", timezone="EST")
+| formatTime(format="%F %T", field=FirstFailedLogon, as="FirstFailedLogon", timezone="Asia/Kolkata")
+| formatTime(format="%F %T", field=LastFailedLogon, as="LastFailedLogon", timezone="Asia/Kolkata")
+| formatTime(format="%F %T", field=LastSuccessfulLogin, as="LastSuccessfulLogin", timezone="Asia/Kolkata")
+| PasswordLastSet := PasswordLastSet * 1000 | formatTime(format="%F %T", field=PasswordLastSet, as="PasswordLastSet", timezone="Asia/Kolkata")
 | default(value="-", field=[FirstFailedLogon, LastFailedLogon, LastSuccessfulLogin, TotalSuccessfulLogins, TotalFailedLogins, PasswordLastSet, LastLoggedOnHost])
 | sort(TotalFailedLogins, order=desc, limit=20000)
 ```
@@ -4836,10 +4836,10 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
   ]))
 | TotalFailedLogins > 3
 | $falcon/helper:enrich(field=UserLogonFlags)
-| formatTime(format="%F %T", field=FirstFailedLogon, as="FirstFailedLogon", timezone="EST")
-| formatTime(format="%F %T", field=LastFailedLogon, as="LastFailedLogon", timezone="EST")
-| formatTime(format="%F %T", field=LastSuccessfulLogin, as="LastSuccessfulLogin", timezone="EST")
-| PasswordLastSet := PasswordLastSet * 1000 | formatTime(format="%F %T", field=PasswordLastSet, as="PasswordLastSet", timezone="EST")
+| formatTime(format="%F %T", field=FirstFailedLogon, as="FirstFailedLogon", timezone="Asia/Kolkata")
+| formatTime(format="%F %T", field=LastFailedLogon, as="LastFailedLogon", timezone="Asia/Kolkata")
+| formatTime(format="%F %T", field=LastSuccessfulLogin, as="LastSuccessfulLogin", timezone="Asia/Kolkata")
+| PasswordLastSet := PasswordLastSet * 1000 | formatTime(format="%F %T", field=PasswordLastSet, as="PasswordLastSet", timezone="Asia/Kolkata")
 | default(value="-", field=[FirstFailedLogon, LastFailedLogon, LastSuccessfulLogin, TotalSuccessfulLogins, TotalFailedLogins, PasswordLastSet, LastLoggedOnHost])
 // Sort by total successful to see if there was successful compromise
 | sort(TotalSuccessfulLogins, order=desc, limit=20000)
@@ -4851,7 +4851,7 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
 * **Category**: Exploitation & Network (Cloud / M365)
 * **Objective**: Hunts for automated lateral file harvesting and ransomware file staging across domain controllers and file servers via Microsoft Defender for Identity telemetry.
 * **Key Operators**: `#Vendor='microsoft', #event.module='defender-identity', groupBy([user.name, source.address]), time_diff_min := (end_time - start_time) / 60000, formatTime(), sort()`
-* **Parameters & Scope**: Thresholds: file_copies > 50 and time_diff_min <= 10. Formats timestamps to UTC and drops intermediate epoch values.
+* **Parameters & Scope**: Thresholds: file_copies > 50 and time_diff_min <= 10. Formats timestamps to IST (GMT+5:30) and drops intermediate epoch values.
 
 ```cql
 #Vendor = "microsoft"
@@ -4868,8 +4868,8 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
 | file_copies > 50
 | time_diff_min := (end_time - start_time) / 60000
 | time_diff_min <= 10
-| start_time_fmt := formatTime("%Y-%m-%d %H:%M:%S", field=start_time, timezone="UTC")
-| end_time_fmt := formatTime("%Y-%m-%d %H:%M:%S", field=end_time, timezone="UTC")
+| start_time_fmt := formatTime("%Y-%m-%d %H:%M:%S", field=start_time, timezone="Asia/Kolkata")
+| end_time_fmt := formatTime("%Y-%m-%d %H:%M:%S", field=end_time, timezone="Asia/Kolkata")
 | drop([start_time, end_time])
 | sort(file_copies, order=desc)
 ```
@@ -4880,7 +4880,7 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
 * **Category**: Exploitation & Network (Multi-OS)
 * **Objective**: Comprehensive 360-degree forensic profile on any destination IP, capturing contacting endpoints, user identity, process lineage, CLI invocations, destination ports, connection volumes, Geolocation (Country/City), and ISP Autonomous System information.
 * **Key Operators**: `#event_simpleName = NetworkConnectIP4, ipLocation(), asn(), join({ProcessRollup2}, field=[aid, ContextProcessId], key=[aid, TargetProcessId]), groupBy(), formatTime(), table()`
-* **Parameters & Scope**: Target IP can be set via parameter (`RemoteAddressIP4 = ?DestinationIP`) or exact IP literal (`8.2.8.2`). Formats FirstSeen/LastSeen to UTC.
+* **Parameters & Scope**: Target IP can be set via parameter (`RemoteAddressIP4 = ?DestinationIP`) or exact IP literal (`8.2.8.2`). Formats FirstSeen/LastSeen to IST (GMT+5:30).
 
 ```cql
 // 1. Scope to outbound network connection telemetry and filter by target IP
@@ -4905,8 +4905,8 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
   ])
 
 // 5. Convert Epoch timestamps to human-readable UTC
-| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
-| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")
+| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
+| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
 | drop([FirstSeenEpoch, LastSeenEpoch])
 
 // 6. Surface high-frequency and critical talkers first
@@ -4920,7 +4920,7 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
 * **Category**: Browser & DNS (Multi-OS)
 * **Objective**: Deep 360-degree forensic profile on any destination domain or subdomain pattern, auditing DNS request activity across endpoints, resolved IP records (`IP4Records`), query frequency, user accounts, and initiating process binaries.
 * **Key Operators**: `#event_simpleName = DnsRequest, DomainName = /(?:^|\.)hcl\.com$/i, join({ProcessRollup2}, field=[aid, ContextProcessId], key=[aid, TargetProcessId]), groupBy(), formatTime(), table()`
-* **Parameters & Scope**: Domain filter uses flexible PCRE regex to capture base domains and any subdomain (e.g. `/(?:^|\.)hcl\.com$/i`). Formats first/last seen to UTC.
+* **Parameters & Scope**: Domain filter uses flexible PCRE regex to capture base domains and any subdomain (e.g. `/(?:^|\.)hcl\.com$/i`). Formats first/last seen to IST (GMT+5:30).
 
 ```cql
 // 1. Scope to DNS Request telemetry (supports exact match, parameter, or regex pattern)
@@ -4941,8 +4941,8 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
   ])
 
 // 4. Format timestamps into standard UTC strings
-| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
-| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")
+| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
+| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
 | drop([FirstSeenEpoch, LastSeenEpoch])
 
 // 5. Order by query volume and present clean summary
@@ -5000,9 +5000,9 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
     collect([ParentBaseFileName, CommandLine])
   ])
 
-// 9. Convert timestamps to UTC
-| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
-| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")
+// 9. Convert timestamps to IST (GMT+5:30)
+| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
+| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
 | drop([FirstSeenEpoch, LastSeenEpoch])
 
 | sort(SocketHits, order=desc)
@@ -5072,9 +5072,9 @@ else=(if(ActiveDirectoryAuditActionType == 512, then="UNLOCKED", else="UNKNOWN")
     collect([ParentBaseFileName, CommandLine, SHA256HashData])
   ])
 
-// 8. Convert timestamps to UTC
-| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
-| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")
+// 8. Convert timestamps to IST (GMT+5:30)
+| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
+| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
 | drop([FirstSeenEpoch, LastSeenEpoch])
 
 // 9. Surface active offensive operations first

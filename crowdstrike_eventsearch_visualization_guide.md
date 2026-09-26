@@ -1098,8 +1098,8 @@ Summarize network connection payload sizes, preserve forensic sample values, or 
     sum(SizeBytes, as=TotalBytesWritten),
     collect([ComputerName, UserName], limit=20)
   ])
-| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
-| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")
+| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="Asia/Kolkata")
+| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="Asia/Kolkata")
 | drop([FirstSeenEpoch, LastSeenEpoch])
 | sort(TotalBytesWritten, order=desc)
 | head(15)
