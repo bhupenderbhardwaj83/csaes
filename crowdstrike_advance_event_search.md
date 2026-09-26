@@ -953,43 +953,57 @@ Always wrap alternatives in `(?:...)` so the engine evaluates them as a single t
 
 ### 2.6 Tier 3: Surgical Power — Lookarounds, Non-Capturing Groups & Dynamic Extraction
 
-#### 1. Lookahead Assertions (Match ahead without consuming text)
-- **Positive Lookahead `(?=...)`**: Asserts condition matches ahead.
-  ```cql
-  // Matches "password" only when immediately followed by = or :
-  #event_simpleName="ProcessRollup2"
-  | CommandLine=/password(?=[=:\s])/i
-  ```
-- **Negative Lookahead `(?!...)`**: Asserts condition does *not* match ahead.
-  ```cql
-  // Matches "powershell" when not followed by ".exe"
-  #event_simpleName="ProcessRollup2"
-  | CommandLine=/powershell(?!\.exe)/i
-  ```
+#### 1. The Core Mental Model: What Are Lookarounds? ("Peeking Without Eating")
+In standard regular expressions, when the engine matches text, it **consumes** those characters and advances its reading position forward.
+**Lookaround assertions** are **zero-width checks**: think of them like a security guard peeking through a doorway. They inspect the neighboring characters ahead or behind to verify a condition, but **they do not step through the door or consume any characters**. The cursor stays right where it was.
 
-#### 2. Lookbehind Assertions (Match behind without consuming text)
-- **Positive Lookbehind `(?<=...)`**: Asserts condition matches behind.
-  ```cql
-  // Matches domain string immediately following an @ character
-  #event_simpleName="ProcessRollup2"
-  | CommandLine=/(?<=@)[a-z0-9.-]+\.[a-z]{2,}/i
-  ```
-- **Negative Lookbehind `(?<!...)`**: Asserts condition does *not* match behind.
-  ```cql
-  // Matches .exe files not preceded by cmd or powershell
-  #event_simpleName="ProcessRollup2"
-  | FileName=/(?<!cmd|powershell)\.exe$/i
-  ```
+- **Lookahead**: Peeks **forward** (to the right of the current match position).
+- **Lookbehind**: Peeks **backward** (to the left of the current match position).
+- **Positive (`=`)**: Asserts that the condition **MUST** be present right next to the current position.
+- **Negative (`!`)**: Asserts that the condition **MUST NOT** be present right next to the current position.
 
-#### 3. Dynamic Field Extraction with `regex()`
-Promote matches into new, first-class fields using named capture groups `(?<FieldName>...)`:
+---
 
+#### 2. Deep-Dive: Each Operator Explained in Plain English
+
+| Syntax | Name | Plain-English Meaning | Where It Is Used in SOC Hunting | Concrete Example |
+| :--- | :--- | :--- | :--- | :--- |
+| `(?=...)` | **Positive Lookahead** | "Match target **A**, but ONLY if it is immediately followed by **B** — but do NOT include **B** in the match." | Catching cleartext credential assignments (`password=`, `pwd:`) without false positives on words like `passwordless`. | `CommandLine=/password(?=[=:\s])/i`<br>✅ Matches: `password=Secret123`, `password:admin`<br>❌ Rejects: `passwordless authentication` |
+| `(?!...)` | **Negative Lookahead** | "Match target **A**, but ONLY if it is **NOT** followed by **B**." | Detecting **masquerading & double extensions** (e.g. `invoice.pdf.exe`) or binaries executing with abnormal suffixes. | `TargetFileName=/\.pdf(?!\.pdf$|\s*$)/i`<br>✅ Matches: `invoice.pdf.exe`, `resume.pdf.bat`<br>❌ Rejects: `annual_report.pdf` |
+| `(?<=...)` | **Positive Lookbehind** | "Match target **B**, but ONLY if it is immediately preceded by **A** — and do NOT include prefix **A** in the extracted value." | **Surgical token extraction**: Grabbing clean URLs, domains, or Base64 payloads directly without ugly prefixes or string stripping. | `CommandLine=/(?<=@)[a-z0-9.-]+\.[a-z]{2,}/i`<br>Input: `curl -u root@c2server.org`<br>Extracted: `c2server.org` (without `@`) |
+| `(?<!...)` | **Negative Lookbehind** | "Match target **B**, but ONLY if it is **NOT** preceded by prefix **A**." | Spotting **spurious system binaries running outside legitimate paths** (ignoring System32 noise). | `FilePath=/(?<!C:\\Windows\\System32\\)cmd\.exe$/i`<br>✅ Matches: `C:\Users\AppData\cmd.exe`<br>❌ Rejects: `C:\Windows\System32\cmd.exe` |
+| `(?<Var>...)` | **Named Capture** | "Capture whatever matches inside `(...)` and instantly promote it into a **new, queryable LogScale column** named `Var`." | Turning unstructured CLI arguments, file extensions, or URLs into columns you can pipe to `groupBy()`, `table()`, or `sort()`. | `\| regex("\.(?<FileExt>[a-zA-Z0-9]{2,5})$", field=TargetFileName)`<br>Creates column `FileExt` |
+| `(?:...)` | **Non-Capturing Group** | "Group these choices together for boolean logic (like `A\|B`), but do **NOT** create a variable or waste CPU memory." | Alternations in high-volume tags: `#event_simpleName=/(?:ProcessRollup2\|SyntheticProcessRollup2)/`. Saves memory during petabyte searches. | `/(?:powershell\|cmd)\.exe$/i` |
+
+---
+
+#### 3. Production Threat Hunting Drills with Lookarounds
+
+##### Drill A: Cleartext Credential Hunter with Positive Lookahead
 ```cql
-// Dynamically extract the file extension and count occurrences
-#event_simpleName="FileCreateForce"
-| regex("\.(?<FileExtension>[a-zA-Z0-9]{2,5})$", field=TargetFileName)
-| groupBy([ComputerName, FileExtension], function=count(as=ExtCount))
-| sort(ExtCount, order=desc)
+// Hunt for passwords passed directly on CLI arguments without noise from "passwordless"
+#event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/
+| CommandLine = /(?:password|passwd|pwd|credentials?)(?=[=:\s])/i
+| table([@timestamp, ComputerName, UserName, FileName, CommandLine])
+| sort(@timestamp, order=desc)
+```
+
+##### Drill B: Double Extension Ransomware/Phishing Hunt with Negative Lookahead
+```cql
+// Detect executables disguised as documents (e.g., .pdf.exe, .docx.bat, .xlsx.vbs)
+#event_simpleName = "FileCreateForce"
+| TargetFileName = /\.(?:docx?|xlsx?|pdf|pptx?|txt|rtf|csv|jpg|png)(?!\.(?:docx?|xlsx?|pdf|pptx?|txt|rtf|csv|jpg|png)$)\.[a-zA-Z0-9]{2,4}$/i
+| table([@timestamp, ComputerName, UserName, TargetFileName, FilePath, Size])
+| sort(@timestamp, order=desc)
+```
+
+##### Drill C: Surgical Base64 Extraction with Lookbehind & Named Capture
+```cql
+// Extract ONLY the raw Base64 encoded payload from powershell without the "-enc " parameter
+#event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/
+| FileName = /powershell(?:\.exe)?$/i
+| regex("(?i)(?<EncodedPayload>(?<=(?:-enc|-encodedcommand)\s+)[A-Za-z0-9+/=]{20,})", field=CommandLine)
+| table([@timestamp, ComputerName, UserName, EncodedPayload, CommandLine])
 ```
 
 ---
