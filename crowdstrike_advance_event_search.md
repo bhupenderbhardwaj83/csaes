@@ -506,7 +506,142 @@ In LogScale CQL, use the top-level pipeline operator `case { ... }` (never neste
 
 ---
 
-#### 4. Top 7 Deadly Query Mistakes & Instant Fixes
+#### 4. Regex Engineering: Substring "Contains" vs. Exact Match & Two Regex Usages
+
+In LogScale CQL, regular expressions serve two fundamentally different architectural purposes: **event filtering** (keeping/dropping rows) and **stream mutation** (extracting patterns to create new fields). Understanding this distinction prevents silent event loss and query failures.
+
+##### 4.1 Keyword Substring "Contains" vs. Precision Boundaries (e.g. `naukri`)
+
+When hunting for an organization, user, or domain keyword (e.g., `naukri`), analysts must choose between raw substring matching and boundary-anchored domain matching:
+
+1. **Basic Substring "Contains" (Broad Case-Insensitive Search)**:
+   ```cql
+   CommandLine = /naukri/i
+   ```
+   * **Behavior**: Matches the keyword `naukri` anywhere inside the target field regardless of case (`Naukri`, `NAUKRI`, `naukri.com`, `export_naukri_resumes.xlsx`).
+   * **When to Use**: Broad command-line searches, process arguments, or finding script names.
+
+2. **Subdomain-Aware Precision Domain Anchor**:
+   ```cql
+   DomainName = /(?:^|\.)naukri\.com$/i
+   ```
+   * **Anatomy Breakdown**:
+     - `(?:^|\.)`: Non-capturing group matching either the start of the string `^` (`naukri.com`) OR an immediate sub-domain dot boundary `\.` (`www.naukri.com`, `api.s1.naukri.com`).
+     - `naukri\.com`: Matches the literal domain label, escaping the dot `\.`.
+     - `$`: Anchored strictly to the end of the string.
+     - `/i`: Case-insensitivity flag.
+   * **Security Advantage**: Prevents deceptive domain spoofing and typosquatting:
+     - ✅ **Matches**: `naukri.com`, `www.naukri.com`, `sub.naukri.com`.
+     - ❌ **Safely Rejects**: `evilnaukri.com` (typosquatting prefix) and `naukri.com.attacker.net` (subdomain spoofing suffix).
+
+---
+
+##### 4.2 The Fundamental Architectural Difference: Inline Regex Filter vs. `regex()` Extraction Function
+
+| Comparison Dimension | Inline Regex Filter / Predicate (`DomainName = /(?:^\|\.)naukri\.com$/i`) | Extraction / Mutation Function (`regex("(?<FullURI>...)", field=CommandLine, strict=false)`) |
+| :--- | :--- | :--- |
+| **Pipeline Role** | **Boolean Filter Gate** | **Stream Transformer / Field Extractor** |
+| **Syntax** | `Field = /pattern/flags` or `Field != /pattern/flags` | `regex("(?<NamedGroup>pattern)", field=TargetField, strict=false)` |
+| **Primary Goal** | Determine whether an event should continue downstream or be dropped. | Parse unstructured text to extract substrings and create **new dynamic fields**. |
+| **Field Creation** | **No new fields created**. Evaluates to boolean `true`/`false`. | **Creates new fields** named after the capture group (`?<FullURI>`). |
+| **Handling Non-Matches** | Discards non-matching events from the stream. | **`strict=false` keeps all events**; unpopulated fields remain null. (`strict=true` drops them). |
+| **Where to Place** | Stage 1 (Pre-Filter) or Stage 3 (Filter gates). | Stage 3 (Transform & Normalize) before `groupBy()` or `table()`. |
+
+> [!WARNING]
+> **The `strict=false` Trap in `regex()`**:
+> By default in LogScale, `regex(...)` runs in `strict=true` mode. This means **any event whose field does not match the regex pattern is permanently dropped from the search results!**
+> Always include `strict=false` when extracting optional values (such as URLs or IPs from `CommandLine`), so that legitimate events without a URL are preserved for downstream analysis and fallback handling via `coalesce()`.
+
+---
+
+#### 5. LogScale Operator Deep-Dive: When, Why & How
+
+##### 5.1 `function=` inside `groupBy()`
+* **Why & When to Use**: By default, `groupBy(Key)` merely collapses events into unique key combinations. To calculate summary statistics per bucket without running separate queries, `function=[...]` accepts an array of aggregation metrics evaluated in a single streaming pass.
+* **Syntax & Mechanics**:
+  ```cql
+  | groupBy([aid, UserName], function=[
+      count(as=TotalAttempts),
+      min(@timestamp, as=FirstSeenEpoch),
+      max(@timestamp, as=LastSeenEpoch),
+      collect([ComputerName, FileName])
+    ])
+  ```
+* **Performance Benefit**: Computes counts, timelines, and sample lists simultaneously in memory, eliminating multi-pipeline bottlenecks.
+
+##### 5.2 `join()` (Cross-Telemetry Correlation)
+* **Why & When to Use**: CrowdStrike sensor telemetry splits process executions (`ProcessRollup2`), network connections (`NetworkConnectIP4`), DNS lookups (`DnsRequest`), and user identities (`UserIdentity`) into discrete events. `join()` stitches these silos together.
+* **Modes**:
+  - `mode=left` (**Standard SOC Practice**): Preserves all primary events even if the lookup in the subquery returns null (e.g. process rollup without corresponding network socket).
+  - `mode=inner`: Keeps only events that exist in **both** datasets (e.g., DNS queries that resulted in confirmed outbound socket connections).
+* **Key Bindings**:
+  ```cql
+  | join({
+      #event_simpleName = UserIdentity
+    }, field=[aid, AuthenticationId], key=[aid, AuthenticationId], include=[UserName, user.name], mode=left)
+  ```
+  - `field=[...]`: Keys on the incoming (outer) event stream.
+  - `key=[...]`: Matching keys in the subquery (inner) dataset.
+  - `include=[...]`: Explicit columns to graft from the subquery onto the main event.
+
+##### 5.3 `collect()` (Preserving Evidence Across Aggregations)
+* **Why & When to Use**: If you group by `[ComputerName, UserName]`, adding `CommandLine` to the group keys would shatter the aggregation into thousands of rows. `collect()` gathers discrete values into a compact array per grouped entity.
+* **Syntax & Best Practices**:
+  ```cql
+  | groupBy(ComputerName, function=[
+      count(as=AlertCount),
+      collect([FileName, CommandLine], limit=100)
+    ])
+  ```
+  - **Memory Safeguard**: Always specify `limit=100` or `limit=1000`.
+  - **Epoch Gotcha**: Never run `collect(@timestamp)` directly because `@timestamp` is a protected internal timestamp. Assign it to an alias first: `_ts := @timestamp | collect(_ts)`.
+
+##### 5.4 `count()` (Volume vs. Cardinality)
+* **Why & When to Use**: Frequency analysis, brute-force thresholding, and measuring blast radius.
+* **Total Rows vs. Distinct Entities**:
+  - **Event Frequency**: `count()` or `count(as=TotalEvents)` (counts every raw event).
+  - **Distinct Entity Cardinality**: `count(aid, distinct=true, as=ImpactedHosts)` (counts unique endpoints).
+* **Hunter Example (Password Spraying)**:
+  ```cql
+  #event_simpleName = UserLogonFailed2
+  | groupBy(UserName, function=[
+      count(as=TotalFailures),
+      count(aid, distinct=true, as=TargetedEndpoints)
+    ])
+  | TargetedEndpoints >= 10 // Surfaces multi-endpoint spray attacks
+  ```
+
+##### 5.5 `min()` & `max()` (Incident Timeline & Dwell Time)
+* **Why & When to Use**: Establishing initial compromise (`FirstSeen`) and most recent adversary presence (`LastSeen`), and calculating total operational dwell time.
+* **Syntax & UTC Conversion**:
+  ```cql
+  | groupBy([aid, UserAccount, DetectedTool], function=[
+      min(@timestamp, as=FirstSeenEpoch),
+      max(@timestamp, as=LastSeenEpoch)
+    ])
+  | DwellMinutes := (LastSeenEpoch - FirstSeenEpoch) / 60000
+  | FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
+  | LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")
+  | drop([FirstSeenEpoch, LastSeenEpoch])
+  ```
+
+##### 5.6 `in()` (Set Membership & Cross-Platform Normalization)
+* **Deconstructing the Statement**:
+  ```cql
+  in(field="fileName", values=[chrome.exe, firefox.exe, msedge.exe], ignoreCase=true)
+  ```
+  - `field="fileName"`: The event attribute to evaluate.
+  - `values=[...]`: Array of allowable match strings. Replaces cumbersome chained `OR` statements (`FileName="chrome.exe" OR FileName="firefox.exe" OR FileName="msedge.exe"`).
+  - `ignoreCase=true`: **Crucial Flag!** Eliminates case sensitivity misses across operating systems, correctly matching `CHROME.EXE`, `Chrome.exe`, and `chrome.exe`.
+* **Negation & Baseline Exclusion (`!in`)**:
+  ```cql
+  #event_simpleName = NetworkConnectIP4
+  | !in(field=RemotePort, values=[80, 443, 8080], ignoreCase=false) // Isolate non-standard ports
+  ```
+
+---
+
+#### 6. Top 7 Deadly Query Mistakes & Instant Fixes
 
 1. **Sorting Before Aggregating**:
    - *Wrong*: `#event_simpleName="ProcessRollup2" | sort(@timestamp, order=desc) | groupBy(UserName, count())`
@@ -532,7 +667,7 @@ In LogScale CQL, use the top-level pipeline operator `case { ... }` (never neste
 
 ---
 
-#### 5. End-to-End Query Construction Walkthrough: Brute-Force & Lateral Movement
+#### 7. End-to-End Query Construction Walkthrough: Brute-Force & Lateral Movement
 
 Let's build a production-grade detection query following the 7 stages step-by-step:
 

@@ -1082,22 +1082,34 @@ In Falcon Advanced Event Search / LogScale dashboards, best practice is to place
 
 ## 4. Tier 3: High — Multi-Metric Stats, Heatmaps & GeoIP Visualizations
 
-### 3.1 Multi-Metric Aggregation Functions (`min`, `max`, `avg`, `sum`)
-Summarize network connection payload sizes or process execution metrics in a single pass.
+### 3.1 Multi-Metric Aggregation Functions (`min`, `max`, `avg`, `sum`, `collect`, `count`)
+Summarize network connection payload sizes, preserve forensic sample values, or calculate operational timelines in a single pass using the bracketed `function=[ ... ]` array syntax.
 
 ```cql
 #event_simpleName="FileCreateForce"
 | SizeBytes := Size
-| groupBy(TargetFileName, function=[count(as=TotalFiles),
-    min(SizeBytes, as=MinSize),
+| groupBy(TargetFileName, function=[
+    count(as=TotalFiles),
+    count(aid, distinct=true, as=ImpactedHosts),
+    min(@timestamp, as=FirstSeenEpoch),
+    max(@timestamp, as=LastSeenEpoch),
     avg(SizeBytes, as=AvgSize),
     max(SizeBytes, as=MaxSize),
-    sum(SizeBytes, as=TotalBytesWritten)
+    sum(SizeBytes, as=TotalBytesWritten),
+    collect([ComputerName, UserName], limit=20)
   ])
+| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
+| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")
+| drop([FirstSeenEpoch, LastSeenEpoch])
 | sort(TotalBytesWritten, order=desc)
 | head(15)
 ```
 
+* **Key Parameters**:
+  - `function=[...]`: Executes all statistical metrics simultaneously in memory over grouped buckets.
+  - `count(aid, distinct=true)`: Measures true entity cardinality (distinct endpoints) rather than raw event volume.
+  - `min(@timestamp)` & `max(@timestamp)`: Anchors incident start and finish timestamps for dwell time calculation.
+  - `collect([fields], limit=N)`: Retains discrete samples without exploding row cardinality.
 * **Best Widget**: Comprehensive Summary Table
 
 ---

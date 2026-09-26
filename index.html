@@ -4085,7 +4085,269 @@ AND ParentBaseFileName!="explorer.exe"
           </div>
         </div>
 
-        <!-- 4. Complete Step-by-Step Production Construction Walkthrough -->
+                <!-- 4. Regex Engineering: Substring Contains vs Extraction & The Two Regex Usages -->
+        <div class="mindmap-section" style="margin-bottom: 26px;">
+          <div class="mindmap-header">
+            <h3>🔍 Regex Engineering: Substring "Contains" vs. Exact Match &amp; Two Regex Usages</h3>
+            <span style="font-size: 11px; color: #ec4899; background: rgba(236, 72, 153, 0.12); padding: 3px 9px; border-radius: 20px; font-weight: 600;">
+              Precision Matching &bull; Field Extraction
+            </span>
+          </div>
+          <p class="mindmap-subtext">
+            Master the vital difference between <strong>inline boolean filter expressions</strong> (keep/discard events) and <strong>extraction functions</strong> (mutate stream and create new fields), plus safe substring and domain matching syntax.
+          </p>
+
+          <!-- Side-by-Side Architectural Comparison -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; margin-bottom: 18px;">
+            
+            <!-- REGEX USAGE 1: INLINE BOOLEAN PREDICATE -->
+            <div class="mm-card" style="border-top: 3px solid #38bdf8;">
+              <div class="mm-top">
+                <span class="mm-subsystem">⚡ Usage 1: Inline Regex Filter (Predicate)</span>
+                <span class="mm-badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">Filter Gate</span>
+              </div>
+              <div style="font-family: var(--font-mono); font-size: 12px; color: #38bdf8; background: rgba(56, 189, 248, 0.08); padding: 8px; border-radius: 4px; margin-bottom: 8px;">
+                DomainName = /(?:^|\.)naukri\.com$/i
+              </div>
+              <ul style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; padding-left: 18px; margin-bottom: 10px;">
+                <li><strong>Purpose</strong>: Boolean test to decide whether to <em>keep</em> or <em>discard</em> events in the pipeline stream.</li>
+                <li><strong>Evaluation</strong>: Evaluates to <code>true</code> or <code>false</code> directly at the kernel filtering stage.</li>
+                <li><strong>Field Creation</strong>: Creates <strong>NO new fields</strong>. The row passes downstream unmodified.</li>
+                <li><strong>Performance</strong>: Blazing fast native PCRE execution.</li>
+                <li><strong>Safe Domain Regex Explained</strong>:
+                  <ul style="padding-left: 14px; margin-top: 4px;">
+                    <li><code>(?:^|\.)</code>: Non-capturing group matching either start-of-string (<code>naukri.com</code>) OR a dot boundary (<code>www.naukri.com</code>, <code>api.naukri.com</code>).</li>
+                    <li><code>naukri\.com$</code>: Matches literal dot and anchors to end of string.</li>
+                    <li><code>/i</code>: Case-insensitive flag (matches <code>NAUKRI.COM</code>).</li>
+                    <li><strong>Security Defense</strong>: Blocks attacker spoofing like <code>badnaukri.com</code> or <code>naukri.com.attacker.com</code>.</li>
+                  </ul>
+                </li>
+              </ul>
+              <div class="code-box table-code-box">
+                <pre><code>// Fast Filter: Matches root domain and all legitimate subdomains
+#event_simpleName = DnsRequest
+| DomainName = /(?:^|\.)naukri\.com$/i</code></pre>
+                <button class="copy-btn" onclick="copyText(this)">Copy</button>
+              </div>
+            </div>
+
+            <!-- REGEX USAGE 2: PARSING / EXTRACTION FUNCTION -->
+            <div class="mm-card" style="border-top: 3px solid #a855f7;">
+              <div class="mm-top">
+                <span class="mm-subsystem">🧬 Usage 2: Extraction Function regex()</span>
+                <span class="mm-badge" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">Stream Mutation</span>
+              </div>
+              <div style="font-family: var(--font-mono); font-size: 12px; color: #c084fc; background: rgba(168, 85, 247, 0.08); padding: 8px; border-radius: 4px; margin-bottom: 8px;">
+                regex("(?&lt;FullURI&gt;https?://[^\s"&#039;&gt;]+)", field=CommandLine, strict=false)
+              </div>
+              <ul style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; padding-left: 18px; margin-bottom: 10px;">
+                <li><strong>Purpose</strong>: Parses raw text strings to extract patterns and <em>dynamically generate new fields</em>.</li>
+                <li><strong>Named Capture Group</strong>: <code>(?&lt;FullURI&gt;...)</code> tells LogScale to allocate a <strong>brand new field</strong> named <code>FullURI</code> populated with the captured URL substring.</li>
+                <li><strong>Target Field</strong>: <code>field=CommandLine</code> specifies which event attribute to inspect.</li>
+                <li><strong>Critical Parameter <code>strict=false</code></strong>:
+                  <ul style="padding-left: 14px; margin-top: 4px;">
+                    <li><strong>Default behavior (<code>strict=true</code>)</strong>: Drops any event that does NOT match the regex!</li>
+                    <li><strong><code>strict=false</code> (SOC Best Practice)</strong>: Keeps all events flowing in the pipeline; if no URL exists, <code>FullURI</code> is simply left null/empty without dropping the record!</li>
+                  </ul>
+                </li>
+              </ul>
+              <div class="code-box table-code-box">
+                <pre><code>// Extract URL from CLI and provide fallback domain URL
+| regex("(?<FullURI>https?://[^\s"\x27>]+)", field=CommandLine, strict=false)
+| FullURI := coalesce([FullURI, format("https://%s/", field=[DomainName])])</code></pre>
+                <button class="copy-btn" onclick="copyText(this)">Copy</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Keyword "Contains / Include" Syntax Table -->
+          <div class="data-table-wrapper" style="margin-bottom: 20px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="min-width: 140px;">Search Type</th>
+                  <th style="min-width: 260px;">LogScale CQL Syntax</th>
+                  <th style="min-width: 240px;">Matches (Examples)</th>
+                  <th style="min-width: 200px;">Does NOT Match (Safety)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Keyword Substring (Contains)</strong></td>
+                  <td><code>CommandLine = /naukri/i</code></td>
+                  <td><code>https://www.naukri.com/jobs</code><br><code>curl naukri.com</code><br><code>naukri_export.csv</code></td>
+                  <td>Strings not containing "naukri" in any casing.</td>
+                </tr>
+                <tr>
+                  <td><strong>Exact Subdomain-Safe Domain</strong></td>
+                  <td><code>DomainName = /(?:^|\.)naukri\.com$/i</code></td>
+                  <td><code>naukri.com</code><br><code>www.naukri.com</code><br><code>jobs.s1.naukri.com</code></td>
+                  <td><code>evilnaukri.com</code> (typosquat)<br><code>naukri.com.attacker.net</code> (spoof)</td>
+                </tr>
+                <tr>
+                  <td><strong>Fast Glob Wildcard</strong></td>
+                  <td><code>DomainName = "*naukri*"</code></td>
+                  <td><code>dev-naukri-test.org</code><br><code>naukri.in</code></td>
+                  <td>Cannot enforce dot/end boundaries safely.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 5. LogScale Operator Deep-Dive: When, Why & How -->
+        <div class="mindmap-section" style="margin-bottom: 26px;">
+          <div class="mindmap-header">
+            <h3>🧠 LogScale Operator Deep-Dive: When, Why &amp; How</h3>
+            <span style="font-size: 11px; color: #34d399; background: rgba(52, 211, 153, 0.12); padding: 3px 9px; border-radius: 20px; font-weight: 600;">
+              function &bull; join &bull; collect &bull; count &bull; min/max &bull; in
+            </span>
+          </div>
+          <p class="mindmap-subtext">
+            Methodical architectural breakdown for the 6 core operators that power advanced multi-event correlation and forensic threat hunting.
+          </p>
+
+          <div class="mindmap-grid">
+
+            <!-- OPERATOR 1: function=[...] in groupBy -->
+            <div class="mm-card">
+              <div class="mm-top">
+                <span class="mm-subsystem">1️⃣ function=[ ... ] in groupBy()</span>
+                <span class="mm-badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">Multi-Metric</span>
+              </div>
+              <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px;">
+                <strong>When to use</strong>: Whenever you use <code>groupBy()</code> and need to compute summary statistics (counts, time windows, lists) across grouped buckets.
+              </p>
+              <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px;">
+                <strong>Why to use</strong>: <code>groupBy()</code> alone only dedupes keys. The <code>function=[...]</code> parameter accepts an array of statistical operations, executing them simultaneously in a single in-memory pass.
+              </p>
+              <div class="code-box table-code-box">
+                <pre><code>| groupBy([aid, UserName], function=[
+    count(as=TotalAttempts),
+    min(@timestamp, as=FirstSeenEpoch),
+    max(@timestamp, as=LastSeenEpoch),
+    collect(ComputerName)
+  ])</code></pre>
+                <button class="copy-btn" onclick="copyText(this)">Copy</button>
+              </div>
+            </div>
+
+            <!-- OPERATOR 2: join() -->
+            <div class="mm-card">
+              <div class="mm-top">
+                <span class="mm-subsystem">2️⃣ join( { subquery }, mode=left|inner )</span>
+                <span class="mm-badge" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">Correlation</span>
+              </div>
+              <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px;">
+                <strong>When to use</strong>: Correlating distinct event streams that live in different sensor subsystems (e.g. bridging <code>NetworkConnectIP4</code> to <code>ProcessRollup2</code>, or resolving LUID to <code>UserIdentity</code>).
+              </p>
+              <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px;">
+                <strong>How to use</strong>: <code>field=[...]</code> specifies outer stream keys; <code>key=[...]</code> specifies inner subquery keys; <code>include=[...]</code> names fields to import; <code>mode=left</code> preserves all primary events even if the lookup fails.
+              </p>
+              <div class="code-box table-code-box">
+                <pre><code>| join({
+    #event_simpleName = UserIdentity
+  }, field=[aid, AuthenticationId], key=[aid, AuthenticationId], 
+     include=[UserName, user.name], mode=left)</code></pre>
+                <button class="copy-btn" onclick="copyText(this)">Copy</button>
+              </div>
+            </div>
+
+            <!-- OPERATOR 3: collect() -->
+            <div class="mm-card">
+              <div class="mm-top">
+                <span class="mm-subsystem">3️⃣ collect( field, limit=N )</span>
+                <span class="mm-badge" style="background: rgba(52, 211, 153, 0.15); color: #34d399;">Evidence Preserver</span>
+              </div>
+              <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px;">
+                <strong>When to use</strong>: Inside <code>groupBy()</code> when you want to retain granular evidence (distinct file names, commands, remote IPs) without exploding the row count into separate records.
+              </p>
+              <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px;">
+                <strong>Golden Rule</strong>: Always specify <code>limit=100</code> to prevent memory blowout. Never collect raw <code>@timestamp</code> without aliasing first (<code>_ts := @timestamp</code>).
+              </p>
+              <div class="code-box table-code-box">
+                <pre><code>| groupBy([ComputerName, UserAccount], function=[
+    count(as=Executions),
+    collect([FileName, CommandLine], limit=50)
+  ])</code></pre>
+                <button class="copy-btn" onclick="copyText(this)">Copy</button>
+              </div>
+            </div>
+
+            <!-- OPERATOR 4: count() & distinct -->
+            <div class="mm-card">
+              <div class="mm-top">
+                <span class="mm-subsystem">4️⃣ count() &amp; count(field, distinct=true)</span>
+                <span class="mm-badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24;">Volume &amp; Scope</span>
+              </div>
+              <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px;">
+                <strong>When to use</strong>: Frequency analysis, brute-force attack surges, network port scanning, and calculating endpoint blast radius.
+              </p>
+              <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px;">
+                <strong>Two Modes</strong>: <code>count()</code> tallies raw event volume; <code>count(aid, distinct=true)</code> counts unique machines impacted (cardinality), separating isolated glitches from enterprise-wide attacks.
+              </p>
+              <div class="code-box table-code-box">
+                <pre><code>| groupBy(UserName, function=[
+    count(as=TotalFailedLogons),
+    count(aid, distinct=true, as=TargetedEndpoints)
+  ])
+| TargetedEndpoints >= 5 // Password Spraying!</code></pre>
+                <button class="copy-btn" onclick="copyText(this)">Copy</button>
+              </div>
+            </div>
+
+            <!-- OPERATOR 5: min() & max() -->
+            <div class="mm-card">
+              <div class="mm-top">
+                <span class="mm-subsystem">5️⃣ min() &amp; max() (Timelines &amp; Dwell Time)</span>
+                <span class="mm-badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171;">Timeline Anchors</span>
+              </div>
+              <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px;">
+                <strong>When to use</strong>: Forensics timeline anchoring. Discovers exactly when an adversary began operating and when they were last active.
+              </p>
+              <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px;">
+                <strong>How to use</strong>: Apply to <code>@timestamp</code> inside <code>groupBy()</code>, then convert with <code>formatTime()</code>:
+              </p>
+              <div class="code-box table-code-box">
+                <pre><code>| groupBy([aid, DetectedTool], function=[
+    min(@timestamp, as=FirstSeenEpoch),
+    max(@timestamp, as=LastSeenEpoch)
+  ])
+| FirstSeen := formatTime("%Y-%m-%d %H:%M:%S", field=FirstSeenEpoch, timezone="UTC")
+| LastSeen := formatTime("%Y-%m-%d %H:%M:%S", field=LastSeenEpoch, timezone="UTC")</code></pre>
+                <button class="copy-btn" onclick="copyText(this)">Copy</button>
+              </div>
+            </div>
+
+            <!-- OPERATOR 6: in() and the fileName example -->
+            <div class="mm-card">
+              <div class="mm-top">
+                <span class="mm-subsystem">6️⃣ in(field=..., values=[...], ignoreCase=true)</span>
+                <span class="mm-badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">Set Membership</span>
+              </div>
+              <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.45; margin-bottom: 8px;">
+                <strong>Deconstruction of Statement</strong>:<br>
+                <code>in(field="fileName", values=[chrome.exe, firefox.exe, msedge.exe], ignoreCase=true)</code>
+              </p>
+              <ul style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; padding-left: 18px; margin-bottom: 8px;">
+                <li><code>field="fileName"</code>: Tells the engine to check the process binary name attribute.</li>
+                <li><code>values=[...]</code>: Replaces clumsy chained <code>OR</code> logic (<code>FileName="chrome.exe" OR FileName="firefox.exe"...</code>).</li>
+                <li><code>ignoreCase=true</code>: <strong>Crucial cross-platform parameter!</strong> Matches <code>CHROME.EXE</code>, <code>Chrome.exe</code>, and <code>chrome.exe</code> without case errors.</li>
+                <li><strong>Exclusion</strong>: <code>!in(...)</code> easily whitelists legitimate ports or system tools.</li>
+              </ul>
+              <div class="code-box table-code-box">
+                <pre><code>#event_simpleName = "ProcessRollup2"
+| in(field="FileName", values=["chrome.exe", "firefox.exe", "msedge.exe"], ignoreCase=true)
+| !in(field="ParentBaseFileName", values=["explorer.exe"], ignoreCase=true)</code></pre>
+                <button class="copy-btn" onclick="copyText(this)">Copy</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 6. Complete Step-by-Step Production Construction Walkthrough -->
         <div class="mindmap-section">
           <div class="mindmap-header">
             <h3>🔨 Complete Step-by-Step Query Construction Walkthrough</h3>
@@ -7261,7 +7523,7 @@ AND ParentBaseFileName!="explorer.exe"
       "intent": "Surfaces active adversary reconnaissance, lateral movement, credential theft, and command-and-control activity. Correlates process execution with network sockets and command arguments to attribute both the attacker user and the targeted destination systems.",
       "operators": "#event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/, case { ... }, join({UserIdentity}), join({NetworkConnectIP4}), regex(?<TargetFromCLI>), coalesce(), groupBy(), formatTime(), table()",
       "parameters": "Multi-vector detection matching binaries, full image paths, and specific CLI command switches across Windows, Linux, and macOS. Resolves UserIdentity and extracts targeted remote IPs/subnets.",
-      "query": "// 1. Ingest real-time process creations and pre-existing running sessions\\n#event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/\\n\\n// 2. Multi-Vector Filter: Detect Top 25 offensive binaries, tools, scripts, and CLI flags\\n| (\\n    FileName = /(?:^|[\\\\\\\\/])(?:nxc|netexec|crackmapexec|cme|sharphound|bloodhound|azurehound|msfconsole|msfvenom|meterpreter|mimikatz|kekeo|rubeus|certipy|secretsdump|wmiexec|smbexec|atexec|ntlmrelayx|chisel|ligolo|beacon|sliver|havoc|badger|seatbelt|winpeas|linpeas|fscan|adfind|lazagne|nanodump|sqlmap|responder|inveigh|hydra|medusa|hashcat|sharpview|powerview)(?:\\\\.exe|\\\\.py|\\\\.bin|\\\\.elf|\\\\.ps1)?$/i\\n    OR ImageFileName = /(?:nxc|netexec|crackmapexec|sharphound|bloodhound|msfvenom|meterpreter|mimikatz|rubeus|certipy|secretsdump|wmiexec|chisel|ligolo|winpeas|linpeas|fscan|adfind|nanodump|sqlmap|responder)/i\\n    OR CommandLine = /(?:nxc\\\\s+(?:smb|winrm|ssh|ldap|rdp|mssql|ftp)|crackmapexec|sharphound|bloodhound|sekurlsa::|lsadump::|privilege::debug|rubeus\\\\s+(?:kerberoast|asreproast|triage|dump|ptt)|certipy\\\\s+(?:find|req|auth)|secretsdump\\\\.py|wmiexec\\\\.py|smbexec\\\\.py|ntlmrelayx\\\\.py|chisel\\\\s+(?:client|server)|ligolo|meterpreter|msfvenom\\\\s+-p|winpeas|linpeas|fscan\\\\s+-h|adfind\\\\s+-f|responder\\\\s+-I|inveigh|nanodump)/i\\n  )\\n\\n// 3. Classify and tag the detected tool for rapid analyst triage\\n| case {\\n    CommandLine = /nxc|netexec|crackmapexec/i OR FileName = /nxc|netexec|crackmapexec/i       | DetectedTool := \"NetExec / CrackMapExec (Lateral Spray)\" ;\\n    CommandLine = /bloodhound|sharphound|azurehound/i OR FileName = /bloodhound|sharphound/i   | DetectedTool := \"BloodHound / SharpHound (AD Recon)\" ;\\n    CommandLine = /msfconsole|msfvenom|meterpreter/i OR FileName = /msfconsole|msfvenom/i     | DetectedTool := \"Metasploit / Meterpreter (Exploitation/Payload)\" ;\\n    CommandLine = /mimikatz|sekurlsa|kekeo/i OR FileName = /mimikatz|kekeo/i                   | DetectedTool := \"Mimikatz / Kekeo (Credential Dumping)\" ;\\n    CommandLine = /rubeus/i OR FileName = /rubeus/i                                             | DetectedTool := \"Rubeus (Kerberos Abuse)\" ;\\n    CommandLine = /certipy/i OR FileName = /certipy/i                                           | DetectedTool := \"Certipy (AD CS PKI Abuse)\" ;\\n    CommandLine = /secretsdump|wmiexec|smbexec|atexec|ntlmrelayx/i OR FileName = /secretsdump/i | DetectedTool := \"Impacket Suite (Lateral Movement)\" ;\\n    CommandLine = /chisel|ligolo/i OR FileName = /chisel|ligolo/i                               | DetectedTool := \"Chisel / Ligolo (C2 Tunnelling & Pivoting)\" ;\\n    CommandLine = /beacon|sliver|havoc|badger/i OR FileName = /beacon|sliver/i                 | DetectedTool := \"C2 Agent (Cobalt Strike / Sliver / Havoc)\" ;\\n    CommandLine = /winpeas|linpeas|seatbelt/i OR FileName = /winpeas|linpeas/i                 | DetectedTool := \"PEAS / Seatbelt (Privilege Escalation Audit)\" ;\\n    CommandLine = /fscan|adfind/i OR FileName = /fscan|adfind/i                                 | DetectedTool := \"fscan / AdFind (Internal Network / AD Recon)\" ;\\n    CommandLine = /sqlmap/i OR FileName = /sqlmap/i                                             | DetectedTool := \"SQLMap (Database Exploitation)\" ;\\n    CommandLine = /responder|inveigh/i OR FileName = /responder|inveigh/i                       | DetectedTool := \"Responder / Inveigh (LLMNR/NBT-NS Poisoning)\" ;\\n    CommandLine = /nanodump|procdump/i OR FileName = /nanodump|procdump/i                       | DetectedTool := \"NanoDump / ProcDump (LSASS Memory Dumper)\" ;\\n    CommandLine = /hydra|medusa|hashcat/i OR FileName = /hydra|medusa/i                         | DetectedTool := \"Hydra / Hashcat (Credential Cracker)\" ;\\n    *                                                                                           | DetectedTool := \"Offensive Post-Exploitation Tool\" ;\\n  }\\n\\n// 4. Resolve authenticated user identity via AuthenticationId LUID\\n| join({\\n    #event_simpleName = UserIdentity\\n  }, field=[aid, AuthenticationId], key=[aid, AuthenticationId], include=[UserName, user.name], mode=left)\\n| UserAccount := coalesce([UserName, user.name, UserSid, \"-\"])\\n\\n// 5. Correlate with outbound socket telemetry to identify targeted remote hosts and ports\\n| join({\\n    #event_simpleName = NetworkConnectIP4\\n  }, field=[aid, TargetProcessId], key=[aid, ContextProcessId], include=[RemoteAddressIP4, RemotePort], mode=left)\\n\\n// 6. Fallback: Extract target IP / CIDR from Command-Line arguments if socket was ephemeral or scanning subnets\\n| regex(\"(?<TargetFromCLI>(?:[0-9]{1,3}\\\\.) {3}[0-9]{1,3}(?:/[0-9]{1,2})?)\", field=CommandLine, strict=false)\\n| TargetDestination := coalesce([RemoteAddressIP4, TargetFromCLI, \"Local-Execution\"])\\n| TargetPort := coalesce([RemotePort, \"-\"])\\n\\n// 7. Aggregate timeline, endpoints, users, and targeted destinations\\n| groupBy([ComputerName, aid, UserAccount, DetectedTool, FileName, TargetDestination, TargetPort], function=[\\n    count(as=TotalExecutions),\\n    min(@timestamp, as=FirstSeenEpoch),\\n    max(@timestamp, as=LastSeenEpoch),\\n    collect([ParentBaseFileName, CommandLine, SHA256HashData])\\n  ])\\n\\n// 8. Convert timestamps to UTC\\n| FirstSeen := formatTime(\"%Y-%m-%d %H:%M:%S\", field=FirstSeenEpoch, timezone=\"UTC\")\\n| LastSeen := formatTime(\"%Y-%m-%d %H:%M:%S\", field=LastSeenEpoch, timezone=\"UTC\")\\n| drop([FirstSeenEpoch, LastSeenEpoch])\\n\\n// 9. Surface active offensive operations first\\n| sort(TotalExecutions, order=desc)\\n| table([FirstSeen, LastSeen, ComputerName, aid, UserAccount, DetectedTool, FileName, TargetDestination, TargetPort, TotalExecutions, ParentBaseFileName, CommandLine, SHA256HashData])"
+      "query": "// 1. Ingest real-time process creations and pre-existing running sessions\n#event_simpleName = /^(ProcessRollup2|SyntheticProcessRollup2)$/\n\n// 2. Multi-Vector Filter: Detect Top 25 offensive binaries, tools, scripts, and CLI flags\n| (\n    FileName = /(?:^|[\\/])(?:nxc|netexec|crackmapexec|cme|sharphound|bloodhound|azurehound|msfconsole|msfvenom|meterpreter|mimikatz|kekeo|rubeus|certipy|secretsdump|wmiexec|smbexec|atexec|ntlmrelayx|chisel|ligolo|beacon|sliver|havoc|badger|seatbelt|winpeas|linpeas|fscan|adfind|lazagne|nanodump|sqlmap|responder|inveigh|hydra|medusa|hashcat|sharpview|powerview)(?:\.exe|\.py|\.bin|\.elf|\.ps1)?$/i\n    OR ImageFileName = /(?:nxc|netexec|crackmapexec|sharphound|bloodhound|msfvenom|meterpreter|mimikatz|rubeus|certipy|secretsdump|wmiexec|chisel|ligolo|winpeas|linpeas|fscan|adfind|nanodump|sqlmap|responder)/i\n    OR CommandLine = /(?:nxc\s+(?:smb|winrm|ssh|ldap|rdp|mssql|ftp)|crackmapexec|sharphound|bloodhound|sekurlsa::|lsadump::|privilege::debug|rubeus\s+(?:kerberoast|asreproast|triage|dump|ptt)|certipy\s+(?:find|req|auth)|secretsdump\.py|wmiexec\.py|smbexec\.py|ntlmrelayx\.py|chisel\s+(?:client|server)|ligolo|meterpreter|msfvenom\s+-p|winpeas|linpeas|fscan\s+-h|adfind\s+-f|responder\s+-I|inveigh|nanodump)/i\n  )\n\n// 3. Classify and tag the detected tool for rapid analyst triage\n| case {\n    CommandLine = /nxc|netexec|crackmapexec/i OR FileName = /nxc|netexec|crackmapexec/i       | DetectedTool := \"NetExec / CrackMapExec (Lateral Spray)\" ;\n    CommandLine = /bloodhound|sharphound|azurehound/i OR FileName = /bloodhound|sharphound/i   | DetectedTool := \"BloodHound / SharpHound (AD Recon)\" ;\n    CommandLine = /msfconsole|msfvenom|meterpreter/i OR FileName = /msfconsole|msfvenom/i     | DetectedTool := \"Metasploit / Meterpreter (Exploitation/Payload)\" ;\n    CommandLine = /mimikatz|sekurlsa|kekeo/i OR FileName = /mimikatz|kekeo/i                   | DetectedTool := \"Mimikatz / Kekeo (Credential Dumping)\" ;\n    CommandLine = /rubeus/i OR FileName = /rubeus/i                                             | DetectedTool := \"Rubeus (Kerberos Abuse)\" ;\n    CommandLine = /certipy/i OR FileName = /certipy/i                                           | DetectedTool := \"Certipy (AD CS PKI Abuse)\" ;\n    CommandLine = /secretsdump|wmiexec|smbexec|atexec|ntlmrelayx/i OR FileName = /secretsdump/i | DetectedTool := \"Impacket Suite (Lateral Movement)\" ;\n    CommandLine = /chisel|ligolo/i OR FileName = /chisel|ligolo/i                               | DetectedTool := \"Chisel / Ligolo (C2 Tunnelling & Pivoting)\" ;\n    CommandLine = /beacon|sliver|havoc|badger/i OR FileName = /beacon|sliver/i                 | DetectedTool := \"C2 Agent (Cobalt Strike / Sliver / Havoc)\" ;\n    CommandLine = /winpeas|linpeas|seatbelt/i OR FileName = /winpeas|linpeas/i                 | DetectedTool := \"PEAS / Seatbelt (Privilege Escalation Audit)\" ;\n    CommandLine = /fscan|adfind/i OR FileName = /fscan|adfind/i                                 | DetectedTool := \"fscan / AdFind (Internal Network / AD Recon)\" ;\n    CommandLine = /sqlmap/i OR FileName = /sqlmap/i                                             | DetectedTool := \"SQLMap (Database Exploitation)\" ;\n    CommandLine = /responder|inveigh/i OR FileName = /responder|inveigh/i                       | DetectedTool := \"Responder / Inveigh (LLMNR/NBT-NS Poisoning)\" ;\n    CommandLine = /nanodump|procdump/i OR FileName = /nanodump|procdump/i                       | DetectedTool := \"NanoDump / ProcDump (LSASS Memory Dumper)\" ;\n    CommandLine = /hydra|medusa|hashcat/i OR FileName = /hydra|medusa/i                         | DetectedTool := \"Hydra / Hashcat (Credential Cracker)\" ;\n    *                                                                                           | DetectedTool := \"Offensive Post-Exploitation Tool\" ;\n  }\n\n// 4. Resolve authenticated user identity via AuthenticationId LUID\n| join({\n    #event_simpleName = UserIdentity\n  }, field=[aid, AuthenticationId], key=[aid, AuthenticationId], include=[UserName, user.name], mode=left)\n| UserAccount := coalesce([UserName, user.name, UserSid, \"-\"])\n\n// 5. Correlate with outbound socket telemetry to identify targeted remote hosts and ports\n| join({\n    #event_simpleName = NetworkConnectIP4\n  }, field=[aid, TargetProcessId], key=[aid, ContextProcessId], include=[RemoteAddressIP4, RemotePort], mode=left)\n\n// 6. Fallback: Extract target IP / CIDR from Command-Line arguments if socket was ephemeral or scanning subnets\n| regex(\"(?<TargetFromCLI>(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?:/[0-9]{1,2})?)\", field=CommandLine, strict=false)\n| TargetDestination := coalesce([RemoteAddressIP4, TargetFromCLI, \"Local-Execution\"])\n| TargetPort := coalesce([RemotePort, \"-\"])\n\n// 7. Aggregate timeline, endpoints, users, and targeted destinations\n| groupBy([ComputerName, aid, UserAccount, DetectedTool, FileName, TargetDestination, TargetPort], function=[\n    count(as=TotalExecutions),\n    min(@timestamp, as=FirstSeenEpoch),\n    max(@timestamp, as=LastSeenEpoch),\n    collect([ParentBaseFileName, CommandLine, SHA256HashData])\n  ])\n\n// 8. Convert timestamps to UTC\n| FirstSeen := formatTime(\"%Y-%m-%d %H:%M:%S\", field=FirstSeenEpoch, timezone=\"UTC\")\n| LastSeen := formatTime(\"%Y-%m-%d %H:%M:%S\", field=LastSeenEpoch, timezone=\"UTC\")\n| drop([FirstSeenEpoch, LastSeenEpoch])\n\n// 9. Surface active offensive operations first\n| sort(TotalExecutions, order=desc)\n| table([FirstSeen, LastSeen, ComputerName, aid, UserAccount, DetectedTool, FileName, TargetDestination, TargetPort, TotalExecutions, ParentBaseFileName, CommandLine, SHA256HashData])"
 }
 ];
 
